@@ -1,0 +1,33 @@
+{
+  "name": "chatup",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ChatUp - a real-time web messaging application",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @chatup/server",
+    "dev:server": "npm run dev -w @chatup/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "prisma:generate": "npm run prisma:generate -w @chatup/server",
+    "db:migrate": "npm run db:migrate -w @chatup/server",
+    "db:seed": "npm run db:seed -w @chatup/server",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.0.0",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0"
+  }
+}

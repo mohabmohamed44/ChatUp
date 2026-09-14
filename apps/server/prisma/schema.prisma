@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MessageKind {
+  TEXT
+  IMAGE
+  AUDIO
+}
+
+enum AttachmentKind {
+  IMAGE
+  AUDIO
+}
+
+enum MediaUploadStatus {
+  PENDING
+  COMPLETED
+  ABANDONED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  avatarMediaId String?
+  avatarMedia  MediaAttachment? @relation("UserAvatar", fields: [avatarMediaId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions     Session[]
+  sentMessages Message[]                @relation("SentMessages")
+  receipts     MessageReceipt[]
+  attachments  MediaAttachment[]        @relation("AttachmentOwner")
+  participants ConversationParticipant[]
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  csrfToken String
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+}
+
+model Conversation {
+  id             String    @id @default(uuid())
+  directKey      String?   @unique
+  createdAt      DateTime  @default(now())
+  lastMessageId  String?
+  lastMessage    Message?  @relation("ConversationLastMessage", fields: [lastMessageId], references: [id])
+  lastActivityAt DateTime  @default(now())
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([lastActivityAt])
+}
+
+model ConversationParticipant {
+  conversationId    String
+  userId            String
+  joinedAt          DateTime @default(now())
+  lastReadMessageId String?
+  lastReadMessage   Message? @relation("LastReadMessage", fields: [lastReadMessageId], references: [id])
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  sequence       BigInt      @default(autoincrement())
+  conversationId String
+  senderId       String
+  clientId       String?
+  kind           MessageKind
+  body           String?
+  attachmentId   String?     @unique
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User              @relation("SentMessages", fields: [senderId], references: [id])
+  attachment   MediaAttachment?  @relation(fields: [attachmentId], references: [id])
+  lastMessageOf Conversation[]   @relation("ConversationLastMessage")
+  readMarkers  ConversationParticipant[] @relation("LastReadMessage")
+  receipts     MessageReceipt[]
+
+  @@unique([conversationId, senderId, clientId])
+  @@index([conversationId, sequence(sort: Desc)])
+  @@index([conversationId, createdAt])
+}
+
+model MediaAttachment {
+  id         String           @id @default(uuid())
+  ownerId    String
+  kind       AttachmentKind
+  mimeType   String
+  sizeBytes  Int
+  storageKey String           @unique
+  width      Int?
+  height     Int?
+  durationMs Int?
+  status     MediaUploadStatus @default(PENDING)
+  createdAt  DateTime         @default(now())
+
+  owner       User       @relation("AttachmentOwner", fields: [ownerId], references: [id])
+  message     Message?
+  avatarUsers User[]     @relation("UserAvatar")
+
+  @@index([ownerId, status, createdAt])
+}
+
+model MessageReceipt {
+  messageId    String
+  userId       String
+  deliveredAt  DateTime?
+  readAt       DateTime?
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId, readAt])
+}
