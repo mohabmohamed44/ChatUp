@@ -5,7 +5,7 @@ build/
 out/
 coverage/
 *.tsbuildinfo
-
+.kilo/
 .env
 .env.*
 .env.example
