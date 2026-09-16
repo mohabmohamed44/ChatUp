@@ -43,3 +43,28 @@
 - Socket authentication middleware
 - `conversation:subscribe` event
 - Text messaging vertical slice
+
+## 2026-09-17 — Socket authentication complete
+
+### Verified
+
+- Two users connect with distinct userIds
+- 101 Switching Protocols handshake confirmed
+- Session cookie sent with handshake (withCredentials)
+- Logout disconnects socket and cancels reconnect
+- 401 on /auth/me handled gracefully
+- Added Auth Endpoints to Postman With Documentation and Example
+
+### Discovered
+
+- Backend messages module is fully implemented:
+  - message:send, message:read, message:sync, message:new
+  - Delivery receipts via markDelivered
+  - Read receipts via markRead
+  - History pagination and missed-message recovery
+  - Conversation update broadcasts
+
+### Next
+
+- Build frontend chat UI (features/chat, features/conversations)
+- Two-user real-time test

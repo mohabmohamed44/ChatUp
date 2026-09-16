@@ -70,7 +70,7 @@ export function createRealtime(
   io.on('connection', (socket) => {
     const userId = socket.data.userId;
     socket.join(SOCKET_ROOMS.user(userId));
-
+    deps.logger.info({ userId, socketId: socket.id }, 'User connected');
     socket.on('typing:start', (payload) => {
       socket.to(SOCKET_ROOMS.conversation(payload.conversationId)).emit('typing:update', {
         conversationId: payload.conversationId,

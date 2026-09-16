@@ -1,5 +1,5 @@
 import type { AuthUser, LoginInput, RegisterInput } from '@chatup/shared';
-import { apiFetch } from '../../shared/lib/api';
+import { ApiError, apiFetch } from '../../shared/lib/api';
 
 export interface AuthResponse {
   user: AuthUser;
@@ -13,8 +13,16 @@ export function login(input: LoginInput): Promise<AuthResponse> {
   return apiFetch<AuthResponse>('/auth/login', { method: 'POST', body: input });
 }
 
-export function me(): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>('/auth/me');
+export async function me(): Promise<{ user: AuthUser | null }> {
+  try {
+    const response = await apiFetch<{ user: AuthUser }>('/auth/me');
+    return response;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return { user: null };
+    }
+    throw error;
+  }
 }
 
 export function logout(): Promise<{ ok: boolean }> {
