@@ -13,7 +13,7 @@ coverage/
 npm-debug.log*
 *.pem
 .DS_Store
-
+TODO.md
 apps/server/src/generated/
 apps/server/prisma/*.db
 playwright-report/

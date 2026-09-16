@@ -16,6 +16,7 @@ import {
   me as fetchMe,
   register as registerRequest,
 } from '../../features/auth/api';
+import { getSocket } from '../lib/socket';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -58,6 +59,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('chatup:unauthorized', handleUnauthorized);
     return () => {
       window.removeEventListener('chatup:unauthorized', handleUnauthorized);
+    };
+  }, []);
+
+  // Connect the socket when the user logs in, disconnect on logout.
+  useEffect(() => {
+    const socket = getSocket();
+    if (user) {
+      if (!socket.connected) socket.connect();
+    } else {
+      socket.disconnect();
+    }
+  }, [user]);
+
+  // Handle socket auth errors: if the session is invalid, clear the user
+  // so the app redirects to /login.
+  useEffect(() => {
+    const socket = getSocket();
+    function onConnectError(err: Error) {
+      if (err.message === 'unauthorized') {
+        setUser(null);
+      }
+    }
+    socket.on('connect_error', onConnectError);
+    return () => {
+      socket.off('connect_error', onConnectError);
     };
   }, []);
 
