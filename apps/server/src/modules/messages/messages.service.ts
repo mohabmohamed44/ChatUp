@@ -1,4 +1,5 @@
 import {
+  CONVERSATION_EVENTS,
   LIMITS,
   MESSAGE_EVENTS,
   SOCKET_ROOMS,
@@ -45,7 +46,7 @@ export async function toMessage(
   if (row.attachment) {
     attachment = {
       id: row.attachment.id,
-      kind: row.attachment.kind as Attachment['kind'],
+      kind: row.attachment.kind.toLowerCase() as Attachment['kind'],
       mimeType: row.attachment.mimeType,
       sizeBytes: row.attachment.sizeBytes,
       width: row.attachment.width,
@@ -62,7 +63,7 @@ export async function toMessage(
     sequence: row.sequence.toString(),
     conversationId: row.conversationId,
     senderId: row.senderId,
-    kind: row.kind as Message['kind'],
+    kind: row.kind.toLowerCase() as Message['kind'],
     body: row.body,
     attachment,
     status: await computeStatus(db, row, viewerId),
@@ -153,25 +154,38 @@ export class MessagesService {
       .to(SOCKET_ROOMS.conversation(input.conversationId))
       .emit(MESSAGE_EVENTS.new, { message: payload });
 
-    await this.emitConversationUpdate(input.conversationId, senderId);
+    await this.emitConversationUpdate(input.conversationId);
 
     return payload;
   }
 
-  private async emitConversationUpdate(conversationId: string, senderId: string): Promise<void> {
+  /**
+   * Summaries are viewer-specific (participants exclude the viewer, unreadCount
+   * is theirs), so every participant receives their own computed summary.
+   */
+  private async emitConversationUpdate(conversationId: string): Promise<void> {
+    const svc = new ConversationsService(this.db);
+    const participantIds = await svc.participantIds(conversationId);
+    await Promise.all(
+      participantIds.map((participantId) =>
+        this.emitConversationUpdateFor(conversationId, participantId),
+      ),
+    );
+  }
+
+  private async emitConversationUpdateFor(
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
     try {
       const svc = new ConversationsService(this.db);
-      const list = await svc.listForUser(senderId);
-      const summary = list.find((c) => c.id === conversationId);
+      const summary = await svc.summaryForUser(conversationId, userId);
       if (!summary) return;
-      const participantIds = await svc.participantIds(conversationId);
-      for (const participantId of participantIds) {
-        this.io
-          .to(SOCKET_ROOMS.user(participantId))
-          .emit('conversation:updated', { conversation: summary });
-      }
+      this.io
+        .to(SOCKET_ROOMS.user(userId))
+        .emit(CONVERSATION_EVENTS.updated, { conversation: summary });
     } catch (err) {
-      this.logger.warn({ err, conversationId }, 'Failed to emit conversation update');
+      this.logger.warn({ err, conversationId, userId }, 'Failed to emit conversation update');
     }
   }
 
@@ -182,17 +196,17 @@ export class MessagesService {
   ) {
     const conversations = new ConversationsService(this.db);
     await conversations.requireMembership(conversationId, userId);
-
+  
     const rows = await this.db.message.findMany({
       where: {
         conversationId,
-        ...(opts.before ? { id: { lt: opts.before } } : {}),
+        ...(opts.before ? { sequence: { lt: BigInt(opts.before) } } : {}),
       },
       orderBy: [{ sequence: 'desc' }],
       take: opts.limit + 1,
       include: { attachment: true },
     });
-
+  
     const hasMore = rows.length > opts.limit;
     const page = hasMore ? rows.slice(0, opts.limit) : rows;
     const items = await Promise.all(
@@ -201,7 +215,7 @@ export class MessagesService {
     const last = page.at(-1);
     return {
       items,
-      nextCursor: hasMore && last ? last.id : null,
+      nextCursor: hasMore && last ? last.sequence.toString() : null,
     };
   }
 
@@ -229,8 +243,26 @@ export class MessagesService {
   }
 
   async markDelivered(conversationId: string, userId: string, messageIds: string[]) {
+    const conversations = new ConversationsService(this.db);
+    await conversations.requireMembership(conversationId, userId);
+
+    // Receipts are only meaningful for messages from OTHER participants of this
+    // conversation. Enforced against the database rather than trusting the
+    // caller's payload, so a malformed or forged socket event can never create
+    // a self-receipt or a cross-conversation one.
+    const deliverable = await this.db.message.findMany({
+      where: {
+        id: { in: messageIds },
+        conversationId,
+        senderId: { not: userId },
+      },
+      select: { id: true },
+    });
+    if (deliverable.length === 0) return;
+
+    const ids = deliverable.map((message) => message.id);
     await Promise.all(
-      messageIds.map((messageId) =>
+      ids.map((messageId) =>
         this.db.messageReceipt.upsert({
           where: { messageId_userId: { messageId, userId } },
           create: { messageId, userId, deliveredAt: new Date() },
@@ -238,7 +270,7 @@ export class MessagesService {
         }),
       ),
     );
-    await this.emitStatus(conversationId, messageIds, 'delivered');
+    await this.emitStatus(conversationId, ids, 'delivered');
   }
 
   async markRead(conversationId: string, userId: string, upToMessageId?: string) {
@@ -294,6 +326,9 @@ export class MessagesService {
         'read',
       );
     }
+
+    // Push the reader's own summary so their unread badge clears immediately.
+    await this.emitConversationUpdateFor(conversationId, userId);
   }
 
   private async emitStatus(

@@ -69,6 +69,15 @@ export function createHttpApp({ config, logger, db, routers }: CreateHttpAppOpti
     app.use('/api', router);
   }
 
+  return app;
+}
+
+/**
+ * Registers the catch-all 404 and error handlers. Must run after every router
+ * has been attached, otherwise routes mounted later would fall through to the
+ * 404 handler.
+ */
+export function attachErrorHandling(app: Express, logger: Logger): void {
   app.use(() => {
     throw Errors.notFound('Route');
   });
@@ -106,6 +115,4 @@ export function createHttpApp({ config, logger, db, routers }: CreateHttpAppOpti
     logger.error({ err }, 'Unhandled request error');
     res.status(500).json({ error: { code: 'internal_error', message: 'Something went wrong' } });
   });
-
-  return app;
 }

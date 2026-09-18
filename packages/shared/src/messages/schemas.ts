@@ -37,7 +37,7 @@ export const messageSyncSchema = z.object({
 });
 
 export const messageHistoryQuerySchema = z.object({
-  before: z.uuid().optional(),
+  before: z.string().regex(/^\d+$/).optional(),
   limit: z.coerce
     .number()
     .int()

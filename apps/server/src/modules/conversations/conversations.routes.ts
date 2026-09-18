@@ -3,7 +3,6 @@ import {
   CONVERSATION_EVENTS,
   SOCKET_ROOMS,
   startConversationSchema,
-  type ConversationSummary,
 } from '@chatup/shared';
 import type { Db } from '../../platform/db';
 import { asyncHandler, Errors } from '../../platform/errors';
@@ -53,7 +52,7 @@ export function createConversationsModule(deps: {
       const conversation = await service.startDirect(auth.userId, userId);
 
       if (!existingCheck) {
-        await broadcastConversation(io, CONVERSATION_EVENTS.created, conversation.id, conversation);
+        await broadcastConversation(io, CONVERSATION_EVENTS.created, conversation.id, service);
       }
       res.status(existingCheck ? 200 : 201).json({ conversation });
     }),
@@ -62,15 +61,23 @@ export function createConversationsModule(deps: {
   return router;
 }
 
+/**
+ * Broadcasts a conversation event to each participant using a summary computed
+ * for that specific viewer. Summaries are not interchangeable: `participants`
+ * excludes the viewer and `unreadCount` is per viewer.
+ */
 export async function broadcastConversation(
   io: ChatIo,
   event: 'conversation:created' | 'conversation:updated',
   conversationId: string,
-  conversation: ConversationSummary,
+  service: ConversationsService,
 ): Promise<void> {
-  io.to(SOCKET_ROOMS.conversation(conversationId)).emit(event, { conversation });
-  const service = conversation;
-  for (const participant of service.participants) {
-    io.to(SOCKET_ROOMS.user(participant.id)).emit(event, { conversation });
-  }
+  const participantIds = await service.participantIds(conversationId);
+  await Promise.all(
+    participantIds.map(async (participantId) => {
+      const summary = await service.summaryForUser(conversationId, participantId);
+      if (!summary) return;
+      io.to(SOCKET_ROOMS.user(participantId)).emit(event, { conversation: summary });
+    }),
+  );
 }

@@ -1,35 +1,18 @@
-'use client';
+import { MessageSquare } from 'lucide-react';
 
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/features/auth';
-
-export default function ConversationsPage() {
-  const { user, logout } = useAuth();
-  const router = useRouter();
-
-  async function handleLogout() {
-    await logout();
-    router.replace('/login');
-  }
-
+export default function ConversationsIndexPage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col p-6">
-      <header className="flex items-center justify-between border-b border-black/10 pb-4 dark:border-white/10">
-        <div>
-          <p className="text-xs uppercase tracking-wide opacity-50">Signed in as</p>
-          <p className="font-medium">{user?.displayName}</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="rounded-lg border border-black/15 px-3 py-1.5 text-sm transition-colors hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-        >
-          Log out
-        </button>
-      </header>
-      <div className="flex flex-1 items-center justify-center">
-        <p className="opacity-60">Conversations are coming soon.</p>
-      </div>
-    </main>
+    <div className="hidden h-full w-full flex-col items-center justify-center gap-3 bg-slate-50 p-8 text-center lg:flex">
+      <span
+        aria-hidden="true"
+        className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm"
+      >
+        <MessageSquare className="h-7 w-7" />
+      </span>
+      <h1 className="text-lg font-semibold text-slate-800">Select a conversation</h1>
+      <p className="max-w-xs text-sm text-slate-500">
+        Choose a chat from the list or start a new one to begin messaging.
+      </p>
+    </div>
   );
 }

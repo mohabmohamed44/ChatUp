@@ -33,6 +33,7 @@ export interface PresenceUpdate {
 
 export interface ClientToServerEvents {
   'message:send': (payload: SendMessagePayload, ack: (result: Ack<Message>) => void) => void;
+  'message:new': (payload: { message: Message }, ack: () => void) => void;
   'message:read': (payload: ReadReceiptPayload, ack: (result: Ack<null>) => void) => void;
   'message:sync': (payload: MessageSyncPayload, ack: (result: Ack<Page<Message>>) => void) => void;
   'typing:start': (payload: TypingStartPayload) => void;
@@ -40,7 +41,7 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
-  'message:new': (payload: { message: Message }, ack: () => void) => void;
+  'message:new': (payload: { message: Message }, ack?: () => void) => void;
   'message:status': (payload: MessageStatusUpdate) => void;
   'conversation:created': (payload: { conversation: ConversationSummary }) => void;
   'conversation:updated': (payload: { conversation: ConversationSummary }) => void;
