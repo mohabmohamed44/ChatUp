@@ -68,3 +68,49 @@
 
 - Build frontend chat UI (features/chat, features/conversations)
 - Two-user real-time test
+
+
+## 2026-09-18 — Phase 3 complete
+
+### Built
+- Chat UI (feature-based): `features/conversations/`, `features/chat/`
+- Pages: `(app)/conversations/page.tsx`, `(app)/conversations/[id]/page.tsx`
+- Socket client singleton wired into AuthProvider
+
+### Test scripts
+- `scripts/test-idempotency.ts` — same clientId twice, asserts one row
+- `scripts/seed-messages.ts` — seeds N messages via socket
+
+### Verified
+- Two-user browser test: Alice + Bob in two windows, real-time exchange — PASS
+- Idempotency: same clientId → same message id, one DB row — PASS
+- Delivery + read receipts: status icons update live — PASS
+- Typing indicators: shown between participants — PASS
+- Presence: online/offline dot in header — PASS
+- Unread counts: increment on new, clear on open — PASS
+- Pagination: 51 messages loaded as 30 + 21, no gaps — PASS
+- Reconnect sync: `message:sync` recovered missed messages — PASS
+
+### Fixed
+- **Pagination cursor was a UUID.** `id: { lt: BigInt(before) }` compared a UUID column to a number, returning nothing.
+  - `id` → `sequence` in the where clause
+  - `nextCursor: last.id` → `last.sequence.toString()`
+  - Schema: `before: z.uuid()` → `z.string().regex(/^\d+$/)`
+  - Verified: 51 messages loaded cleanly across two pages
+
+### Closed
+- **Self-receipts** — not reproducible. Re-seeded 40 messages, diagnostic query returned 0 receipts. Earlier observation was likely a stale dev server.
+
+### Discovered
+- Prisma 7 moved seed config from `package.json` to `prisma.config.ts`
+- Seed command is now `migrations.seed: 'tsx prisma/seed.ts'`
+
+### Coverage vs. brief
+- Section 7 — Conversations and history ✅
+- Section 8 — Real-time messaging ✅
+- Section 9 — Text messages ✅
+- Section 12 — Presence, typing, status ✅
+- Section 13 — Data model and API ✅ (written API docs deferred to Phase 5)
+
+### Next
+- Phase 4: image upload and voice messages
