@@ -1,4 +1,4 @@
-import { LIMITS, type ConversationSummary, type MessagePreview } from '@chatup/shared';
+import { LIMITS, PREVIEW_LABELS, type ConversationSummary, type MessagePreview } from '@chatup/shared';
 import type { Db } from '../../platform/db';
 import { Errors } from '../../platform/errors';
 
@@ -22,8 +22,9 @@ type ConversationRow = {
 function previewText(row: ConversationRow): string {
   const message = row.lastMessage;
   if (!message) return '';
-  if (message.kind === 'image') return LIMITS.PREVIEW_LABELS.image;
-  if (message.kind === 'audio') return LIMITS.PREVIEW_LABELS.audio;
+  const kind = message.kind.toLowerCase();
+  if (kind === 'image') return PREVIEW_LABELS.image;
+  if (kind === 'audio') return PREVIEW_LABELS.audio;
   return message.body ?? '';
 }
 
@@ -32,7 +33,7 @@ function toSummary(row: ConversationRow, viewerId: string): ConversationSummary 
     ? ({
         messageId: row.lastMessage.id,
         senderId: row.lastMessage.senderId,
-        kind: row.lastMessage.kind as MessagePreview['kind'],
+        kind: row.lastMessage.kind.toLowerCase() as MessagePreview['kind'],
         preview: previewText(row).slice(0, 140),
         createdAt: row.lastMessage.createdAt.toISOString(),
       }) satisfies MessagePreview
@@ -51,37 +52,53 @@ function toSummary(row: ConversationRow, viewerId: string): ConversationSummary 
 export class ConversationsService {
   constructor(private readonly db: Db) {}
 
-  async listForUser(userId: string): Promise<ConversationSummary[]> {
+  private async loadRowsForUser(userId: string, conversationId?: string) {
     const rows = await this.db.conversation.findMany({
-      where: { participants: { some: { userId } } },
+      where: {
+        participants: { some: { userId } },
+        ...(conversationId ? { id: conversationId } : {}),
+      },
       orderBy: { lastActivityAt: 'desc' },
-      take: 100,
+      take: conversationId ? 1 : 100,
       include: {
         participants: { select: { userId: true, user: { select: { id: true, displayName: true } } } },
         lastMessage: true,
       },
     });
 
-    const withCounts = await Promise.all(
+    return Promise.all(
       rows.map(async (row) => {
-        const lastReadId = await this.db.conversationParticipant.findUnique({
+        const membership = await this.db.conversationParticipant.findUnique({
           where: { conversationId_userId: { conversationId: row.id, userId } },
-          select: { lastReadMessageId: true },
+          select: { lastReadMessage: { select: { sequence: true } } },
         });
+        const lastReadSequence = membership?.lastReadMessage?.sequence ?? null;
         const unreadCount = await this.db.message.count({
           where: {
             conversationId: row.id,
             senderId: { not: userId },
-            ...(lastReadId?.lastReadMessageId
-              ? { id: { gt: lastReadId.lastReadMessageId } }
-              : {}),
+            // Message ids are random UUIDs, so cursors must compare on sequence.
+            ...(lastReadSequence !== null ? { sequence: { gt: lastReadSequence } } : {}),
           },
         });
         return { ...row, unreadCount };
       }),
     );
+  }
 
-    return withCounts.map((row) => toSummary(row, userId));
+  async listForUser(userId: string): Promise<ConversationSummary[]> {
+    const rows = await this.loadRowsForUser(userId);
+    return rows.map((row) => toSummary(row, userId));
+  }
+
+  /**
+   * Summary as seen by `userId`: participants exclude the viewer and
+   * unreadCount is specific to them.
+   */
+  async summaryForUser(conversationId: string, userId: string): Promise<ConversationSummary | null> {
+    const rows = await this.loadRowsForUser(userId, conversationId);
+    const row = rows[0];
+    return row ? toSummary(row, userId) : null;
   }
 
   async startDirect(userId: string, otherUserId: string): Promise<ConversationSummary> {

@@ -1,6 +1,7 @@
+import { createServer } from 'node:http';
 import { config } from './platform/config';
 import { createDb } from './platform/db';
-import { createHttpApp } from './platform/http';
+import { attachErrorHandling, createHttpApp } from './platform/http';
 import { logger } from './platform/logger';
 import { StorageService } from './platform/storage';
 import { createAuthModule } from './modules/auth';
@@ -30,9 +31,7 @@ async function main(): Promise<void> {
     routers: [auth.router, usersRouter],
   });
 
-  const server = app.listen(config.PORT, () => {
-    logger.info({ port: config.PORT, env: config.NODE_ENV }, 'ChatUp server listening');
-  });
+  const server = createServer(app);
 
   const { io, presence } = createRealtime(server, { config, logger, db, storage });
 
@@ -61,6 +60,13 @@ async function main(): Promise<void> {
   app.use('/api', conversationsRouter);
   app.use('/api', messagesRouter);
   app.use('/api', mediaRouter);
+
+  // Registered last so every router above is matched first.
+  attachErrorHandling(app, logger);
+
+  server.listen(config.PORT, () => {
+    logger.info({ port: config.PORT, env: config.NODE_ENV }, 'ChatUp server listening');
+  });
 
   let shuttingDown = false;
   const shutdown = (signal: string) => {
