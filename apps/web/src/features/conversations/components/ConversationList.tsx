@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { LogOut, Plus, X } from 'lucide-react';
+import { LogOut, MessagesSquare, Plus, X } from 'lucide-react';
 import { useAuth } from '@/features/auth';
 import { usePresence } from '@/features/chat/hooks/usePresence';
 import { initialsOf } from '@/shared/lib/format';
@@ -34,11 +34,9 @@ export function ConversationList() {
         <div className="flex items-center gap-2">
           <span
             aria-hidden="true"
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-              <path d="M4.5 6.75A3.75 3.75 0 0 1 8.25 3h7.5A3.75 3.75 0 0 1 19.5 6.75v7.5a3.75 3.75 0 0 1-3.75 3.75H13.5l-3.9 3.3a.75.75 0 0 1-1.2-.6V18h-.15A3.75 3.75 0 0 1 4.5 14.25v-7.5Z" />
-            </svg>
+            <MessagesSquare size={24} />
           </span>
           <span className="text-base font-semibold tracking-tight text-slate-900">ChatUp</span>
         </div>

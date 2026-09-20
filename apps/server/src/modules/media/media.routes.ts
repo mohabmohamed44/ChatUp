@@ -142,5 +142,39 @@ export function createMediaModule(deps: {
     }),
   );
 
+  router.get('/media/:id', deps.requireAuth, asyncHandler(async (req, res) => {
+    const auth = req.auth;
+    if (!auth) throw Errors.unauthorized();
+
+    const attachment = await db.mediaAttachment.findUnique({
+      where: {
+        id: req.params.id as string,
+      },
+      include: {
+        message: {
+          include: {
+            conversation: {
+              include: {
+                participants: { select: { userId: true } },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!attachment) throw Errors.notFound('Media attachment not found');
+    if (!attachment.message) throw Errors.badRequest('Media attachment is not associated with a message');
+
+    const isParticipant = attachment.message.conversation.participants.some((p) => p.userId === auth.userId);
+
+    if (!isParticipant) throw Errors.forbidden('Not a partcipant in this conversation');
+
+    const url = await storage.signedGetUrl(attachment.storageKey, 300);
+
+    res.json({ url });
+
+  }));
+
   return router;
 }

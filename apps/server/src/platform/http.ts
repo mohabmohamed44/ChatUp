@@ -2,6 +2,7 @@ import cookie from 'cookie';
 import cors from 'cors';
 import express, { type Express, type NextFunction, type Request, type RequestHandler, type Response, type Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
+import multer from 'multer';
 import { pinoHttp } from 'pino-http';
 import { ZodError } from 'zod';
 import helmet from 'helmet';
@@ -90,6 +91,18 @@ export function attachErrorHandling(app: Express, logger: Logger): void {
           message: err.message,
           ...(err.details !== undefined ? { details: err.details } : {}),
         },
+      });
+      return;
+    }
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        res.status(400).json({
+          error: { code: 'bad_request', message: `File exceeds the maximum size limit` },
+        });
+        return;
+      }
+      res.status(400).json({
+        error: { code: 'bad_request', message: err.message },
       });
       return;
     }

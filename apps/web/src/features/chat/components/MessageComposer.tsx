@@ -3,19 +3,22 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { SendHorizontal } from 'lucide-react';
 import { LIMITS } from '@chatup/shared';
+import { ImagePicker } from './ImagePicker';
+import type { SendInput } from '../hooks/useSendMessage';
 
 export function MessageComposer({
   onSend,
   onTyping,
   disabled = false,
 }: {
-  onSend: (body: string) => void;
+  onSend: (input: SendInput) => void;
   onTyping?: () => void;
   disabled?: boolean;
 }) {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Auto-resize the textarea as the user types
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -25,10 +28,10 @@ export function MessageComposer({
 
   const canSend = value.trim().length > 0 && !disabled;
 
-  function submit() {
+  function submitText() {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
-    onSend(trimmed);
+    onSend({ kind: 'text', body: trimmed });
     setValue('');
     textareaRef.current?.focus();
   }
@@ -36,19 +39,28 @@ export function MessageComposer({
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      submit();
+      submitText();
     }
+  }
+
+  function handleImageUploaded(attachmentId: string, localPreviewUrl: string) {
+    if (disabled) return;
+    onSend({ kind: 'image', attachmentId, localPreviewUrl });
   }
 
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        submit();
+        submitText();
       }}
       className="border-t border-slate-200 bg-white p-3"
     >
       <div className="flex items-end gap-2">
+        <ImagePicker
+          onUploaded={handleImageUploaded}
+          disabled={disabled}
+        />
         <label htmlFor="message-composer" className="sr-only">
           Message
         </label>
