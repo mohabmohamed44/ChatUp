@@ -114,3 +114,68 @@
 
 ### Next
 - Phase 4: image upload and voice messages
+
+## 2026-09-20 — Image upload complete
+
+### Built
+
+**Backend**
+- `POST /media/:kind` — multipart upload via multer
+  - Magic-byte MIME detection (JPEG, PNG, GIF, WebP)
+  - Size limit enforcement (10 MB images)
+  - Row created `PENDING` → `COMPLETED`
+  - Rollback on storage failure
+- `GET /media/:id` — signed URL after participant check
+  - Walks attachment → message → conversation → participants
+  - Returns 403 for non-participants
+  - Returns 400 if attachment is not yet attached to a message
+- `toMessage()` generates signed GET URLs for each attachment
+- `MEDIA_URL_TTL_SECONDS=900` in config
+
+**Frontend**
+- `useImageUpload.ts` — XHR upload with progress
+- `ImagePicker.tsx` — file picker with local preview and progress bar
+- `ImageMessage.tsx` — renders `attachment.url` in the bubble
+- `ImageLightbox.tsx` — fullscreen viewer with ESC + click-outside
+- `MessageComposer.tsx` — camera button
+- `MessageBubble.tsx` — dispatches on `message.kind`
+- `useSendMessage.ts` — accepts `SendInput` union (text, image, audio)
+
+### Verified
+
+**Backend (curl)**
+- Valid JPEG → 201 with attachment id
+- 11 MB file → 400 size rejected
+- Text file named .jpg → 400 MIME rejected
+- Unauthenticated upload → 401
+- Fetch not-attached attachment → 400
+- Fetch as non-participant → 403
+
+**Frontend (two browsers)**
+- Upload small JPEG → renders in chat as pending, then sent
+- Upload PNG, WebP → render
+- Refresh → image persists
+- Bob (incognito) sees Alice's image in real time
+- Click image → lightbox opens, ESC closes
+- Oversized file → clear error message
+- Wrong MIME → clear error message
+- Multiple images in a row → all render, no duplicates
+- Mobile viewport → layout intact
+
+### Fixed
+- `useImageUpload.ts` was missing the `/api` prefix → 404 on upload.
+  Corrected to `POST /api/media/${kind}`.
+- `ImagePicker` `onUploaded` signature — aligned to pass both
+  `attachmentId` and `localPreviewUrl` so the optimistic bubble can
+  render the local preview immediately.
+
+### Notes
+- Local uploads are near-instant (<300 ms for 2 MB).
+- Upload approach is direct multipart (multer → server → storage.put),
+  not signed PUT URLs. Simpler and already implemented.
+- Signed URL TTL is 900 s. Regenerated on each message fetch.
+- Local dev uses `fake-gcs-server` on port 4443.
+
+### Next
+- Voice messages: MediaRecorder, preview, playback
+- Then merge `feature/media-images` to `main`
