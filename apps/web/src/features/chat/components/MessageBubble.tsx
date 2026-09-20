@@ -1,8 +1,10 @@
 'use client';
 
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { formatFullTimestamp, formatMessageTime } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
+import { getMediaUrl } from '../api';
 import type { ChatMessage } from '../hooks/useConversationMessages';
 import { StatusIcon } from './StatusIcon';
 
@@ -21,6 +23,25 @@ export function MessageBubble({
   const canRetry =
     isOwn && message.status === 'failed' && clientId !== null && body !== null;
 
+  const [imgSrc, setImgSrc] = useState<string | null>(attachment?.url ?? null);
+  const refreshed = useRef(false);
+
+  useEffect(() => {
+    setImgSrc(attachment?.url ?? null);
+    refreshed.current = false;
+  }, [attachment?.url, attachment?.id]);
+
+  const handleImgError = useCallback(async () => {
+    if (!attachment?.id || refreshed.current) return;
+    refreshed.current = true;
+    try {
+      const fresh = await getMediaUrl(attachment.id);
+      if (fresh.url) setImgSrc(fresh.url);
+    } catch {
+      // keep broken src; user sees broken image fallback
+    }
+  }, [attachment?.id]);
+
   return (
     <div className={cn('flex w-full', isOwn ? 'justify-end' : 'justify-start')}>
       <div className="max-w-[85%] sm:max-w-[75%]">
@@ -32,13 +53,14 @@ export function MessageBubble({
               : 'rounded-bl-md border border-slate-200 bg-white text-slate-900',
           )}
         >
-          {attachment?.kind === 'image' && attachment.url ? (
+          {attachment?.kind === 'image' && imgSrc ? (
             <img
-              src={attachment.url}
+              src={imgSrc}
               alt={body ?? 'Image attachment'}
               width={attachment.width ?? undefined}
               height={attachment.height ?? undefined}
               loading="lazy"
+              onError={handleImgError}
               className="mb-1.5 max-h-72 w-full rounded-lg object-cover"
             />
           ) : null}
