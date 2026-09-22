@@ -35,7 +35,7 @@ export function createMessagesModule(deps: {
       if (!auth) throw Errors.unauthorized();
       const query = messageHistoryQuerySchema.parse(req.query);
       const page: Page<Message> = await service.history(
-        req.params.conversationId,
+        req.params.conversationId as string,
         auth.userId,
         query,
       );

@@ -5,30 +5,25 @@ import type { Attachment } from '@chatup/shared';
 import { getMediaUrl } from '../api';
 import { ImageLightbox } from './ImageLightbox';
 
-interface Props {
-  attachment: Attachment;
-}
-
-export function ImageMessage({ attachment }: Props) {
+export function ImageMessage({ attachment }: { attachment: Attachment }) {
+  const [src, setSrc] = useState(attachment.url);
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [src, setSrc] = useState<string | null>(attachment.url);
   const refreshed = useRef(false);
 
   useEffect(() => {
     setSrc(attachment.url);
     refreshed.current = false;
-    setLoaded(false);
   }, [attachment.url, attachment.id]);
 
-  const handleError = useCallback(async () => {
+  const onError = useCallback(async () => {
     if (refreshed.current) return;
     refreshed.current = true;
     try {
       const fresh = await getMediaUrl(attachment.id);
       if (fresh.url) setSrc(fresh.url);
     } catch {
-      // keep existing src; fallback UI will show if still broken
+      // image stays broken; no further retry
     }
   }, [attachment.id]);
 
@@ -48,7 +43,7 @@ export function ImageMessage({ attachment }: Props) {
         className="block overflow-hidden rounded-lg"
       >
         {!loaded && (
-          <div className="flex h-40 w-60 items-center justify-center bg-slate-100 text-xs text-slate-500">
+          <div className="flex h-40 w-60 items-center justify-center bg-black/10 text-xs">
             Loading…
           </div>
         )}
@@ -56,17 +51,12 @@ export function ImageMessage({ attachment }: Props) {
           src={src}
           alt="Shared image"
           onLoad={() => setLoaded(true)}
-          onError={handleError}
-          className={`max-h-72 max-w-xs rounded-lg object-cover ${loaded ? 'block' : 'hidden'}`}
+          onError={onError}
+          className={`max-h-72 w-full rounded-lg object-cover ${loaded ? 'block' : 'hidden'}`}
         />
       </button>
 
-      {open && (
-        <ImageLightbox
-          url={src}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {open && <ImageLightbox url={src} onClose={() => setOpen(false)} />}
     </>
   );
 }

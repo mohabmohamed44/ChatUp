@@ -5,6 +5,7 @@ import { SendHorizontal } from 'lucide-react';
 import { LIMITS } from '@chatup/shared';
 import { ImagePicker } from './ImagePicker';
 import type { SendInput } from '../hooks/useSendMessage';
+import { VoiceRecorder } from './VoiceRecorder';
 
 export function MessageComposer({
   onSend,
@@ -80,6 +81,15 @@ export function MessageComposer({
           aria-describedby="message-composer-hint"
           className="max-h-32 flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/15 disabled:opacity-60"
         />
+          <VoiceRecorder
+            onRecorded={(attachmentId, durationMs, previewUrl) => {
+              if (disabled) return;
+              onSend({ kind: 'audio', attachmentId, durationMs });
+              // previewUrl is unused for audio today — the real URL replaces it on ack
+              void previewUrl;
+            }}
+            disabled={disabled}
+          />
         <button
           type="submit"
           disabled={!canSend}

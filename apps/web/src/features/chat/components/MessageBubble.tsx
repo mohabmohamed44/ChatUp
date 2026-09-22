@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { formatFullTimestamp, formatMessageTime } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
-import { getMediaUrl } from '../api';
+import { ImageMessage } from './ImageMessage';
+import { VoiceMessage } from './VoiceMessage';
 import type { ChatMessage } from '../hooks/useConversationMessages';
 import { StatusIcon } from './StatusIcon';
 
@@ -20,67 +20,48 @@ export function MessageBubble({
   const attachment = message.attachment;
   const clientId = message.clientId;
   const body = message.body;
+
+  // Retry is only wired for text messages right now.
+  // Image/audio retry would need the attachmentId + kind, which the parent
+  // does not currently pass. Keep this limitation until that is added.
   const canRetry =
-    isOwn && message.status === 'failed' && clientId !== null && body !== null;
+    isOwn &&
+    message.status === 'failed' &&
+    message.kind === 'text' &&
+    clientId !== null &&
+    body !== null;
 
-  const [imgSrc, setImgSrc] = useState<string | null>(attachment?.url ?? null);
-  const refreshed = useRef(false);
-
-  useEffect(() => {
-    setImgSrc(attachment?.url ?? null);
-    refreshed.current = false;
-  }, [attachment?.url, attachment?.id]);
-
-  const handleImgError = useCallback(async () => {
-    if (!attachment?.id || refreshed.current) return;
-    refreshed.current = true;
-    try {
-      const fresh = await getMediaUrl(attachment.id);
-      if (fresh.url) setImgSrc(fresh.url);
-    } catch {
-      // keep broken src; user sees broken image fallback
-    }
-  }, [attachment?.id]);
+  // Reduce padding when the bubble contains only media.
+  const isMediaOnly = message.kind !== 'text';
 
   return (
     <div className={cn('flex w-full', isOwn ? 'justify-end' : 'justify-start')}>
       <div className="max-w-[85%] sm:max-w-[75%]">
         <div
           className={cn(
-            'rounded-2xl px-3.5 py-2 text-sm shadow-sm',
+            'rounded-2xl text-sm shadow-sm',
+            isMediaOnly ? 'px-1.5 py-1.5' : 'px-3.5 py-2',
             isOwn
               ? 'rounded-br-md bg-indigo-600 text-white'
               : 'rounded-bl-md border border-slate-200 bg-white text-slate-900',
           )}
         >
-          {attachment?.kind === 'image' && imgSrc ? (
-            <img
-              src={imgSrc}
-              alt={body ?? 'Image attachment'}
-              width={attachment.width ?? undefined}
-              height={attachment.height ?? undefined}
-              loading="lazy"
-              onError={handleImgError}
-              className="mb-1.5 max-h-72 w-full rounded-lg object-cover"
-            />
+          {message.kind === 'image' && attachment ? (
+            <ImageMessage attachment={attachment} />
           ) : null}
 
-          {attachment?.kind === 'audio' && attachment.url ? (
-            <audio
-              controls
-              preload="none"
-              src={attachment.url}
-              className="mb-1.5 h-9 w-56 max-w-full"
-            >
-              <track kind="captions" />
-            </audio>
+          {message.kind === 'audio' && attachment ? (
+            <VoiceMessage isOwn={isOwn} attachment={attachment} />
           ) : null}
 
-          {body ? <p className="whitespace-pre-wrap break-words">{body}</p> : null}
+          {message.kind === 'text' && body ? (
+            <p className="whitespace-pre-wrap break-words">{body}</p>
+          ) : null}
 
           <div
             className={cn(
-              'mt-1 flex items-center gap-1 text-[11px]',
+              'flex items-center gap-1 text-[11px]',
+              isMediaOnly ? 'mt-0.5 px-2' : 'mt-1',
               isOwn ? 'justify-end text-indigo-100' : 'text-slate-400',
             )}
           >

@@ -101,7 +101,7 @@ export default function ConversationPage() {
         isLoadingMore={isLoadingMore}
         error={error}
         onLoadMore={() => void loadMore()}
-        onRetry={(clientId, body) => sendMessage(body, clientId)}
+        onRetry={(clientId, body) => sendMessage({ kind: 'text', body }, clientId)}
         onRetryLoad={reload}
       />
 
