@@ -179,3 +179,31 @@
 ### Next
 - Voice messages: MediaRecorder, preview, playback
 - Then merge `feature/media-images` to `main`
+
+
+## 2026-09-22 — Voice messages complete
+
+### Built
+- `useVoiceRecorder.ts` — MediaRecorder wrapper with timer and cleanup
+- `VoiceRecorder.tsx` — idle / recording / preview states
+- `VoiceMessage.tsx` — playback with countdown timer and progress bar
+- Wired into MessageComposer and MessageBubble
+
+### Verified
+- Record → preview → send works
+- Countdown timer displays remaining time (was showing total before fix)
+- Progress bar visible on both own and other bubbles
+- Two users exchange voice messages in real time
+- Mic denial → clear error message
+- Cancel mid-recording → no message, stream released
+
+### Fixed
+- Timer was showing total duration, not remaining. Now tracks
+  `currentMs` via `onTimeUpdate` and displays `remainingMs` while playing.
+- Progress bar used `bg-white/20` on a white bubble — invisible.
+  Now colors depend on `isOwn`.
+
+### Notes
+- MIME format: Chrome/Firefox → audio/webm; Safari → audio/mp4
+- Backend already accepts both via magic-byte detection
+- Max recording: 120s (enforced client + server)
