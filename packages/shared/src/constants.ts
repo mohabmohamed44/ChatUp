@@ -18,7 +18,7 @@ export const LIMITS = {
 
   AUDIO_MAX_BYTES: 10 * 1024 * 1024,
   AUDIO_ALLOWED_MIME: ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/mpeg'] as readonly string[],
-  RECORDING_MAX_SECONDS: 180,
+  RECORDING_MAX_SECONDS: 120,
 
   TYPING_EMIT_THROTTLE_MS: 2000,
   TYPING_INDICATOR_TTL_MS: 6000,

@@ -29,6 +29,18 @@ function detectImageMime(buf: Buffer): string | null {
 }
 
 function detectAudioMime(buf: Buffer): string | null {
+  // WebM/Matroska (EBML header 0x1A45DFA3) - what Chrome/Firefox MediaRecorder
+  // actually produces for audio/webm;codecs=opus
+  if (
+    buf.length >= 4 &&
+    buf[0] === 0x1a &&
+    buf[1] === 0x45 &&
+    buf[2] === 0xdf &&
+    buf[3] === 0xa3
+  ) {
+    return 'audio/webm';
+  }
+  // Legacy/fallback: some variations / future RIFF-based WebM
   if (
     buf.length > 12 &&
     buf.subarray(0, 4).equals(Buffer.from('RIFF')) &&
@@ -39,10 +51,14 @@ function detectAudioMime(buf: Buffer): string | null {
   if (buf.length > 12 && buf.subarray(4, 8).equals(Buffer.from('ftyp'))) {
     return 'audio/mp4';
   }
-  if (buf.subarray(0, 4).equals(Buffer.from('OggS'))) {
+  if (buf.length >= 4 && buf.subarray(0, 4).equals(Buffer.from('OggS'))) {
     return 'audio/ogg';
   }
-  if (buf.subarray(0, 3).equals(Buffer.from('ID3')) || buf[0] === 0xff) {
+  if (
+    buf.length >= 3 &&  
+    (buf.subarray(0, 3).equals(Buffer.from('ID3')) ||
+      (buf.length >= 2 && buf[0] === 0xff && buf[1] !== undefined && (buf[1] & 0xe0) === 0xe0))
+  ) {
     return 'audio/mpeg';
   }
   return null;

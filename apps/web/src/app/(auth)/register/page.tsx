@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { RegisterForm } from '@/features/auth';
+import { MessagesSquare } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Create account | ChatUp',
@@ -11,9 +12,7 @@ export default function RegisterPage() {
     <section aria-labelledby="register-heading" className="w-full">
       <div className="mb-8 flex justify-center lg:hidden">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/30">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7">
-            <path d="M4.5 6.75A3.75 3.75 0 0 1 8.25 3h7.5A3.75 3.75 0 0 1 19.5 6.75v7.5a3.75 3.75 0 0 1-3.75 3.75H13.5l-3.9 3.3a.75.75 0 0 1-1.2-.6V18h-.15A3.75 3.75 0 0 1 4.5 14.25v-7.5Z" />
-          </svg>
+          <MessagesSquare size={24}/>
         </span>
       </div>
 

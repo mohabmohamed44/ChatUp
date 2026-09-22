@@ -74,6 +74,7 @@ describe('POST /api/media/:kind - image mime & size validation', () => {
         }),
         update: vi.fn(async ({ where, data }: any) => {
           const rec = attachments.get(where.id);
+          if (!rec) throw new Error(`Attachment ${where.id} not found`);
           Object.assign(rec, data);
           if (data.status === 'COMPLETED') rec.status = 'COMPLETED';
           return rec;
