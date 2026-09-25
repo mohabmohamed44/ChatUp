@@ -7,6 +7,7 @@ import { ImageMessage } from './ImageMessage';
 import { VoiceMessage } from './VoiceMessage';
 import type { ChatMessage } from '../hooks/useConversationMessages';
 import { StatusIcon } from './StatusIcon';
+import { MessageBody } from './MessageBody';
 
 export function MessageBubble({
   message,
@@ -55,7 +56,7 @@ export function MessageBubble({
           ) : null}
 
           {message.kind === 'text' && body ? (
-            <p className="whitespace-pre-wrap break-words">{body}</p>
+            <MessageBody text={body} isOwn={isOwn} />
           ) : null}
 
           <div

@@ -1,3 +1,9 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/noto-sans-arabic/400.css';
+@import '@fontsource/noto-sans-arabic/500.css';
+
 @import 'tailwindcss';
 
 :root {
@@ -5,7 +11,33 @@
   --foreground: #0f172a;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+@layer utilities {
+  .unicode-bidi-isolate {
+    unicode-bidi: isolate;
+  }
+  .unicode-bidi-plaintext {
+    unicode-bidi: plaintext;
+  }
+}
+
+
+/*
+* Font stack for message text.
+* Inter for Latin, Noto Sans Arabic for Arabic glyphs.
+* Both fonts are bundled locally via @fontsource so there are
+* no network requests and no FOUC.
+*/
+@layer base {
+.font-message {
+  font-family:
+    'Inter',
+    'Noto Sans Arabic',
+    'Segoe UI',
+    -apple-system,
+    'Helvetica Neue',
+    Arial,
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+    sans-serif;
+}
 }
