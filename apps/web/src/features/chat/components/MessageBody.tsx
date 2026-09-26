@@ -6,6 +6,7 @@ import {
   TRUNCATE_AT,
   analyzeDirection,
   isUnbreakable,
+  segmentText,
   truncate,
 } from '@/shared/lib/text';
 
@@ -18,35 +19,71 @@ export function MessageBody({
 }) {
   const [expanded, setExpanded] = useState(false);
 
-  const { text: preview, isTruncated } = useMemo(
-    () => truncate(text, TRUNCATE_AT),
-    [text],
-  );
+  const { text: preview, isTruncated } = useMemo(() => truncate(text, TRUNCATE_AT), [text]);
+  const { dir, hasMixed } = useMemo(() => analyzeDirection(text), [text]);
 
-  const { dir, hasMixed } = useMemo(
-    () => analyzeDirection(text),
-    [text],
-  );
-
-  const unbreakable = isUnbreakable(text);
   const display = expanded || !isTruncated ? text : preview;
+  const segments = useMemo(() => segmentText(display), [display]);
+  const unbreakable = isUnbreakable(text);
 
   return (
     <div className="flex flex-col">
       <p
         dir={dir}
         className={cn(
-          // Preserve newlines and wrap long words
           'whitespace-pre-wrap break-words',
-          // Isolate BiDi so runs do not scramble siblings
           'unicode-bidi-isolate',
-          // Break a single huge token (URL) if needed
           unbreakable && 'break-all',
-          // Font fallback that covers Latin + Arabic glyphs
           'font-message',
         )}
       >
-        {hasMixed ? <bdi>{display}</bdi> : display}
+        {hasMixed ? (
+          <bdi>
+            {segments.map((seg, i) =>
+              seg.type === 'text' ? (
+                <span key={i}>{seg.value}</span>
+              ) : (
+                <a
+                  key={i}
+                  href={seg.href}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className={cn(
+                    'underline underline-offset-2 break-all',
+                    isOwn
+                      ? 'text-indigo-100 hover:text-white'
+                      : 'text-indigo-600 hover:text-indigo-500',
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {seg.value}
+                </a>
+              ),
+            )}
+          </bdi>
+        ) : (
+          segments.map((seg, i) =>
+            seg.type === 'text' ? (
+              <span key={i}>{seg.value}</span>
+            ) : (
+              <a
+                key={i}
+                href={seg.href}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className={cn(
+                  'underline underline-offset-2 break-all',
+                  isOwn
+                    ? 'text-indigo-100 hover:text-white'
+                    : 'text-indigo-600 hover:text-indigo-500',
+                )}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {seg.value}
+              </a>
+            ),
+          )
+        )}
       </p>
 
       {isTruncated && (
