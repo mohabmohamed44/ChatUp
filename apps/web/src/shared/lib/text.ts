@@ -113,11 +113,6 @@ export function truncate(
       // The link fills the whole window; fall through to the grapheme cut.
     }
   }
-  // before returning isTruncated, check
-  if (isUnbreakable(text)) {
-    return { text, isTruncated: false };
-  }
-
   return { text: previewBody + '…', isTruncated: true };
 }
 
