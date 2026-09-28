@@ -9,34 +9,38 @@
 - Symptom: `Cannot find module '@prisma/client/runtime/library.js'`
 - Cause: Prisma 7 changed the client output model and requires a driver adapter.
 - Fix: Installed `@prisma/adapter-pg`, initialized `PrismaClient` with the adapter,
-  set a custom output path in `schema.prisma`, and updated all imports to the
-  generated path.
+set a custom output path in `schema.prisma`, and updated all imports to the
+generated path.
 - Files: `apps/server/prisma/schema.prisma`, `apps/server/src/platform/db.ts`,
-  `apps/server/prisma.config.ts`
+`apps/server/prisma.config.ts`
 
 **2. Session cookie removed in DevTools did not auto-redirect**
 
 - Symptom: deleting the cookie left the user on a protected page until refresh.
 - Cause: React state does not know the cookie disappeared. Nothing triggers a
-  re-fetch until the next API call.
+re-fetch until the next API call.
 - Fix: added a global 401 handler. `apiFetch` dispatches `chatup:unauthorized`;
-  `AuthProvider` listens, clears the user, and the protected layout redirects.
+`AuthProvider` listens, clears the user, and the protected layout redirects.
 - Files: `apps/web/src/shared/lib/api.ts`,
-  `apps/web/src/shared/providers/AuthProvider.tsx`
+`apps/web/src/shared/providers/AuthProvider.tsx`
 
-**3. Inline `tsx -e` with `!` broke in bash**
+**3. Inline** `tsx -e` **with** `!` **broke in bash**
 
 - Symptom: `bash: !user: event not found`
 - Cause: bash treats `!` as history expansion.
 - Fix: use single quotes around the inline script and double quotes inside it.
 
+
+
 ### Decisions made
 
 - Chose React Context for auth state; deferred TanStack Query to Phase 3 for
-  conversations and messages.
+conversations and messages.
 - Kept the feature-based folder structure for the frontend.
 - Used shared Zod schemas in `packages/shared` so client and server validate
-  with the same rules.
+with the same rules.
+
+
 
 ### Next
 
@@ -44,7 +48,11 @@
 - `conversation:subscribe` event
 - Text messaging vertical slice
 
+
+
 ## 2026-09-17 — Socket authentication complete
+
+
 
 ### Verified
 
@@ -55,6 +63,8 @@
 - 401 on /auth/me handled gracefully
 - Added Auth Endpoints to Postman With Documentation and Example
 
+
+
 ### Discovered
 
 - Backend messages module is fully implemented:
@@ -64,24 +74,36 @@
   - History pagination and missed-message recovery
   - Conversation update broadcasts
 
+
+
 ### Next
 
 - Build frontend chat UI (features/chat, features/conversations)
 - Two-user real-time test
 
 
+
 ## 2026-09-18 — Phase 3 complete
 
+
+
 ### Built
+
 - Chat UI (feature-based): `features/conversations/`, `features/chat/`
 - Pages: `(app)/conversations/page.tsx`, `(app)/conversations/[id]/page.tsx`
 - Socket client singleton wired into AuthProvider
 
+
+
 ### Test scripts
+
 - `scripts/test-idempotency.ts` — same clientId twice, asserts one row
 - `scripts/seed-messages.ts` — seeds N messages via socket
 
+
+
 ### Verified
+
 - Two-user browser test: Alice + Bob in two windows, real-time exchange — PASS
 - Idempotency: same clientId → same message id, one DB row — PASS
 - Delivery + read receipts: status icons update live — PASS
@@ -91,35 +113,55 @@
 - Pagination: 51 messages loaded as 30 + 21, no gaps — PASS
 - Reconnect sync: `message:sync` recovered missed messages — PASS
 
+
+
 ### Fixed
+
 - **Pagination cursor was a UUID.** `id: { lt: BigInt(before) }` compared a UUID column to a number, returning nothing.
   - `id` → `sequence` in the where clause
   - `nextCursor: last.id` → `last.sequence.toString()`
   - Schema: `before: z.uuid()` → `z.string().regex(/^\d+$/)`
   - Verified: 51 messages loaded cleanly across two pages
 
+
+
 ### Closed
+
 - **Self-receipts** — not reproducible. Re-seeded 40 messages, diagnostic query returned 0 receipts. Earlier observation was likely a stale dev server.
 
+
+
 ### Discovered
+
 - Prisma 7 moved seed config from `package.json` to `prisma.config.ts`
 - Seed command is now `migrations.seed: 'tsx prisma/seed.ts'`
 
+
+
 ### Coverage vs. brief
+
 - Section 7 — Conversations and history ✅
 - Section 8 — Real-time messaging ✅
 - Section 9 — Text messages ✅
 - Section 12 — Presence, typing, status ✅
 - Section 13 — Data model and API ✅ (written API docs deferred to Phase 5)
 
+
+
 ### Next
+
 - Phase 4: image upload and voice messages
 
+
+
 ## 2026-09-20 — Image upload complete
+
+
 
 ### Built
 
 **Backend**
+
 - `POST /media/:kind` — multipart upload via multer
   - Magic-byte MIME detection (JPEG, PNG, GIF, WebP)
   - Size limit enforcement (10 MB images)
@@ -133,6 +175,7 @@
 - `MEDIA_URL_TTL_SECONDS=900` in config
 
 **Frontend**
+
 - `useImageUpload.ts` — XHR upload with progress
 - `ImagePicker.tsx` — file picker with local preview and progress bar
 - `ImageMessage.tsx` — renders `attachment.url` in the bubble
@@ -141,9 +184,12 @@
 - `MessageBubble.tsx` — dispatches on `message.kind`
 - `useSendMessage.ts` — accepts `SendInput` union (text, image, audio)
 
+
+
 ### Verified
 
 **Backend (curl)**
+
 - Valid JPEG → 201 with attachment id
 - 11 MB file → 400 size rejected
 - Text file named .jpg → 400 MIME rejected
@@ -152,6 +198,7 @@
 - Fetch as non-participant → 403
 
 **Frontend (two browsers)**
+
 - Upload small JPEG → renders in chat as pending, then sent
 - Upload PNG, WebP → render
 - Refresh → image persists
@@ -162,34 +209,50 @@
 - Multiple images in a row → all render, no duplicates
 - Mobile viewport → layout intact
 
+
+
 ### Fixed
+
 - `useImageUpload.ts` was missing the `/api` prefix → 404 on upload.
-  Corrected to `POST /api/media/${kind}`.
+Corrected to `POST /api/media/${kind}`.
 - `ImagePicker` `onUploaded` signature — aligned to pass both
-  `attachmentId` and `localPreviewUrl` so the optimistic bubble can
-  render the local preview immediately.
+`attachmentId` and `localPreviewUrl` so the optimistic bubble can
+render the local preview immediately.
+
+
 
 ### Notes
+
 - Local uploads are near-instant (<300 ms for 2 MB).
 - Upload approach is direct multipart (multer → server → storage.put),
-  not signed PUT URLs. Simpler and already implemented.
+not signed PUT URLs. Simpler and already implemented.
 - Signed URL TTL is 900 s. Regenerated on each message fetch.
 - Local dev uses `fake-gcs-server` on port 4443.
 
+
+
 ### Next
+
 - Voice messages: MediaRecorder, preview, playback
 - Then merge `feature/media-images` to `main`
 
 
+
 ## 2026-09-22 — Voice messages complete
 
+
+
 ### Built
+
 - `useVoiceRecorder.ts` — MediaRecorder wrapper with timer and cleanup
 - `VoiceRecorder.tsx` — idle / recording / preview states
 - `VoiceMessage.tsx` — playback with countdown timer and progress bar
 - Wired into MessageComposer and MessageBubble
 
+
+
 ### Verified
+
 - Record → preview → send works
 - Countdown timer displays remaining time (was showing total before fix)
 - Progress bar visible on both own and other bubbles
@@ -197,13 +260,225 @@
 - Mic denial → clear error message
 - Cancel mid-recording → no message, stream released
 
+
+
 ### Fixed
+
 - Timer was showing total duration, not remaining. Now tracks
-  `currentMs` via `onTimeUpdate` and displays `remainingMs` while playing.
+`currentMs` via `onTimeUpdate` and displays `remainingMs` while playing.
 - Progress bar used `bg-white/20` on a white bubble — invisible.
-  Now colors depend on `isOwn`.
+Now colors depend on `isOwn`.
+
+
 
 ### Notes
+
 - MIME format: Chrome/Firefox → audio/webm; Safari → audio/mp4
 - Backend already accepts both via magic-byte detection
 - Max recording: 120s (enforced client + server)
+
+
+
+## 2026-09-26 — Read more, clickable links, network banner
+
+
+
+### Built
+
+**Read more button**
+
+- `apps/web/src/shared/lib/text.ts` — truncation helpers
+- `apps/web/src/features/chat/components/MessageBody.tsx` — new component
+- Truncates messages over 300 characters at a word boundary
+- "Read more" / "Show less" toggle
+- Uses `Intl.Segmenter` for grapheme-safe truncation (emoji, Arabic combining marks)
+- Never cuts inside a URL — backs off to before the link starts
+
+**Clickable links**
+
+- `linkify-it` for URL detection
+- Only http/https become clickable. `javascript:`, `data:`, `file:`, `ftp:`, `mailto:`, protocol-relative URLs are rejected
+- All links open in a new tab with `target="_blank"` and `rel="noopener noreferrer nofollow"`
+- Long URLs wrap with `break-all`, do not break the layout
+- `segmentText()` re-checks the scheme as defense in depth
+
+**BiDi text rendering**
+
+- `analyzeDirection()` returns base direction from the first strong character
+- `hasMixed` flag detects Arabic + Latin in the same message
+- `<bdi>` wrapper around mixed content for character-level isolation
+- `unicode-bidi: isolate` on the message paragraph
+- Wrapped in `<p dir="rtl|ltr|auto">` so each message picks its own direction
+
+**Font stack**
+
+- Installed `@fontsource/inter` and `@fontsource/noto-sans-arabic`
+- Added `.font-message` class with fallback chain: Inter → Noto Sans Arabic → system fonts
+- Prevents Latin glyphs from being substituted with Arabic lookalikes
+
+**Network status banner**
+
+- `apps/web/src/features/chat/hooks/useNetworkStatus.ts` — combines `navigator.onLine` with socket state
+- `apps/web/src/features/chat/components/ConnectionBanner.tsx` — red for offline, amber for reconnecting
+- Debounced 1.5s to avoid flicker on brief drops
+- Accessible: `role="status"`, `aria-live="polite"`
+- Sliding animation: `max-height` transition for smooth show/hide
+- Mounted in `apps/web/src/app/(app)/layout.tsx`
+
+**Layout polish**
+
+- Spinner-based loading state on auth check
+- Semantic `<main>` element for the content area
+- `bg-slate-50` background for the app shell
+
+
+
+### Fixed
+
+- `linkify-it` **import** — was `import { LinkifyIt }` (named), should be `import LinkifyIt` (default). Named import was `undefined` at runtime.
+- **Scheme removal** — `linkify.add('ftp:', null)` adds with a null definition instead of removing. Correct call is `linkify.add('ftp:')` with no second argument.
+- `ARABIC_RE` **escapes** — regex was corrupted with literal Arabic characters instead of `\uXXXX` escape sequences. Restored proper escapes for Hebrew, Arabic, Persian, Urdu ranges.
+- **Fuzzy email and IP detection** — disabled `fuzzyEmail` and `fuzzyIP` to prevent false positives (`user@example.com`, `192.168.1.1`).
+
+
+
+### Verified
+
+**Read more**
+
+- Short messages (< 300 chars) → no button
+- Exactly 300 chars → no button
+- 301+ chars → button appears, toggles correctly
+- Long URL at the cut point → truncates before the link, not inside it
+- Arabic, mixed Arabic/English, emoji-heavy messages all truncate cleanly
+- Own vs other bubbles → correct button color
+- Multiple long messages → independent expand state
+
+**Clickable links**
+
+- `https://example.com` → clickable, opens in new tab
+- `www.example.com` → clickable, becomes `http://www.example.com`
+- `javascript:alert(1)` → NOT clickable
+- `data:text/html,...` → NOT clickable
+- `ftp://example.com` → NOT clickable
+- `mailto:user@example.com` → NOT clickable
+- `//evil.com` → NOT clickable
+- Trailing punctuation (`.`, `,`, `)`) excluded from link
+- Multiple URLs in one message → all clickable
+- URLs inside Arabic text → correct direction, correct glyphs
+
+**Network banner**
+
+- DevTools → Offline → red banner appears "No internet connection"
+- Stop backend → amber banner appears "Reconnecting…"
+- Restart backend → banner auto-hides on reconnect
+- Restore connection → banner disappears immediately
+- Debounce works: brief drops (< 1.5s) do not flash the banner
+
+**BiDi text**
+
+- Arabic-only messages render RTL
+- English-only messages render LTR
+- Mixed Arabic + Latin: each script renders with correct direction and glyphs
+- Numbers and emoji are neutral, do not affect base direction
+
+
+
+### Known limitations
+
+- Rich link previews (WhatsApp-style cards) not implemented. Would need a backend endpoint with SSRF protection.
+- Bare emails like `user@example.com` are not clickable (fuzzyEmail disabled by design).
+- Bare IP addresses like `192.168.1.1` are not clickable (fuzzyIP disabled).
+- Multi-line BiDi is handled per paragraph, but very complex mixed content could still have edge cases.
+
+
+
+### Notes
+
+- `linkify-it` is what Slack and Discord use. Well-tested and maintained.
+- Truncation uses `Intl.Segmenter` for grapheme clustering. Supported in all modern browsers.
+- The banner debounce is 1.5 seconds. Brief WiFi blips will not show the banner.
+- The `dir` attribute is computed per message, not per app. Arabic users can still see English messages with correct LTR rendering.
+
+
+
+### Next
+
+- Voice draft persistence (from Eng. Mohammed's list)
+- Message editing with `editedAt` column and `message:edit` socket event
+- Local cache with IndexedDB for messages and conversations
+- PWA + FCM for push notifications
+- Message queues for async work (only when needed)
+
+## 2026-09-28 — Design documentation
+
+### Built
+
+**Conceptual ERD (Chen notation)**
+- 7 entities as rectangles: User, Session, Conversation, ConversationParticipant, Message, MessageReceipt, MediaAttachment
+- Attributes as ellipses, with primary keys underlined
+- Composite primary keys on ConversationParticipant and MessageReceipt
+- Relationships as diamonds with cardinality on the edges
+- 11 relationships total, all marked with cardinality
+- Uses draw.io (source + PDF export)
+
+**Physical ERD (relational schema)**
+- Same 7 entities, but showing actual columns and types
+- UUID primary keys, foreign keys marked, unique constraints marked
+- Indexes and composite keys documented
+- Uses `erDiagram` syntax + draw.io
+
+**System Architecture (three tiers)**
+- Client tier: Browser, React UI, AuthProvider, Socket.IO Client, HTTP client
+- Application tier: Express API, Socket.IO Server, Auth Middleware, Feature Modules, Platform Layer
+- Data tier: PostgreSQL, Redis, Object Storage
+- Two protocols labeled: HTTPS for REST, WSS for realtime
+- Color-coded by tier (blue / yellow / green)
+
+**Modular Monolith diagram**
+- Shows three packages: apps/web, apps/server, packages/shared
+- Feature modules listed: auth, conversations, messages, media, presence, users
+- Platform layer: config, db, storage, logger, http, errors
+- Dependency arrows: solid for runtime, dashed for compile-time imports
+- Rule: dependencies point inward only
+
+**GCP Deployment Topology**
+- HTTPS Load Balancer with managed SSL
+- Cloud CDN for frontend static assets
+- Compute Engine e2-small VM for backend
+- Cloud SQL for PostgreSQL
+- Memorystore for Redis
+- Cloud Storage for media
+- Artifact Registry, Secret Manager, Cloud Logging
+
+**Docker Compose architecture**
+- Local dev: postgres, redis, fake-gcs (infra only)
+- Full stack: infra + api + web containers
+- Service names and ports labeled
+- One network, service-name DNS
+
+### Fixed
+- `Auth (Argon2)` → `Auth (scrypt)` in the architecture diagrams.
+  The code uses scrypt (N=16384, r=8, p=1), not Argon2.
+- Cardinality labels on `Message ↔ MediaAttachment` (0..1 : 1) and
+  `Message ↔ ConversationParticipant` (Many : 0..1) corrected.
+
+### Verified
+- Every entity in the conceptual ERD matches `schema.prisma`
+- All 11 relationships present with correct cardinality
+- Primary keys underlined; composite keys marked
+- 3-tier architecture matches the actual code folders
+- Modular monolith structure matches `apps/` and `packages/` layout
+- GCP topology uses only services in the planned deployment
+
+### Notes
+- Diagrams stored in `docs/diagrams/` with both `.drawio` sources and `.png` exports
+- Eraser.io used to generate the initial drafts, then refined in draw.io
+- PDFs merged into a single file for delivery to Mr. Mohammed
+- Source files committed so the diagrams can be edited later
+
+### Next
+- Voice draft persistence
+- Message editing with editedAt column and message:edit event
+- Local cache with IndexedDB
+- PWA + FCM
