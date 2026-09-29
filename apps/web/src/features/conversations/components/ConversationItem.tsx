@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import type { ConversationSummary, PresenceStatus } from '@chatup/shared';
-import { formatListTimestamp, initialsOf } from '@/shared/lib/format';
+import { formatListTimestamp, initialsOf, formatFullTimestamp } from '@/shared/lib/format';
+import { useLocale } from "@/shared/providers/LocaleProvider";
 import { cn } from '@/shared/lib/utils';
 
 export function ConversationItem({
@@ -23,7 +24,9 @@ export function ConversationItem({
   const preview = lastMessage
     ? `${lastMessage.senderId === currentUserId ? 'You: ' : ''}${lastMessage.preview}`
     : 'No messages yet';
-
+  
+  const { locale } = useLocale();
+  
   return (
     <li>
       <Link
@@ -65,10 +68,11 @@ export function ConversationItem({
             </span>
             {lastMessage ? (
               <time
-                dateTime={lastMessage.createdAt}
+                dateTime={conversation.lastActivityAt}
+                title={formatFullTimestamp(conversation.lastActivityAt, locale)}
                 className="shrink-0 text-xs text-slate-400"
               >
-                {formatListTimestamp(lastMessage.createdAt)}
+                {formatListTimestamp(conversation.lastActivityAt, locale)}
               </time>
             ) : null}
           </span>

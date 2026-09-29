@@ -1,12 +1,13 @@
 'use client';
 
 import { RotateCcw } from 'lucide-react';
-import { formatFullTimestamp, formatMessageTime } from '@/shared/lib/format';
+import { formatBubbleTimestamp, formatFullTimestamp, formatMessageTime } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { ImageMessage } from './ImageMessage';
 import { VoiceMessage } from './VoiceMessage';
 import type { ChatMessage } from '../hooks/useConversationMessages';
 import { StatusIcon } from './StatusIcon';
+import { useLocale } from "@/shared/providers/LocaleProvider";
 import { MessageBody } from './MessageBody';
 
 export function MessageBubble({
@@ -21,7 +22,7 @@ export function MessageBubble({
   const attachment = message.attachment;
   const clientId = message.clientId;
   const body = message.body;
-
+  const { locale } = useLocale();
   // Retry is only wired for text messages right now.
   // Image/audio retry would need the attachmentId + kind, which the parent
   // does not currently pass. Keep this limitation until that is added.
@@ -66,8 +67,11 @@ export function MessageBubble({
               isOwn ? 'justify-end text-indigo-100' : 'text-slate-400',
             )}
           >
-            <time dateTime={message.createdAt} title={formatFullTimestamp(message.createdAt)}>
-              {formatMessageTime(message.createdAt)}
+            <time dateTime={message.createdAt} 
+              title={formatFullTimestamp(message.createdAt)}
+
+            >
+                {formatBubbleTimestamp(message.createdAt, locale)}
             </time>
             {isOwn ? <StatusIcon status={message.status} /> : null}
           </div>
