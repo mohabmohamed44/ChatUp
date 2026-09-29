@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { ConversationSummary, PresenceStatus } from '@chatup/shared';
 import { initialsOf } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
+import { LanguageToggle } from '@/shared/components/LanguageToggle';
 
 export function ChatHeader({
   conversation,
@@ -26,7 +27,7 @@ export function ChatHeader({
         aria-label="Back to conversations"
         className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 lg:hidden"
       >
-        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+        <ArrowLeft className="h-5 w-5 rtl:rotate-180" aria-hidden="true" />
       </Link>
 
       <span className="relative shrink-0">
@@ -36,7 +37,7 @@ export function ChatHeader({
         <span
           aria-hidden="true"
           className={cn(
-            'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white',
+            'absolute -bottom-0.5 h-3 w-3 rounded-full border-2 border-white ltr:-right-0.5 rtl:-left-0.5',
             presence === 'online' ? 'bg-emerald-500' : 'bg-slate-300',
           )}
         />
@@ -51,6 +52,8 @@ export function ChatHeader({
           {statusText}
         </p>
       </div>
+
+      <LanguageToggle className="shrink-0" />
     </header>
   );
 }

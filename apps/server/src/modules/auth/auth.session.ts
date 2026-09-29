@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { Response } from 'express';
 import { LIMITS } from '@chatup/shared';
 import type { AppConfig } from '../../platform/config';
-import type { Db } from '../../platform/db';
+import type { Db, Tx } from '../../platform/db';
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
@@ -13,7 +13,7 @@ export interface SessionBundle {
 }
 
 export async function createSession(
-  db: Db,
+  db: Tx,
   config: AppConfig,
   userId: string,
 ): Promise<SessionBundle> {

@@ -8,7 +8,7 @@ import {
   type MessageDeliveryStatus,
   type SendMessageInput,
 } from '@chatup/shared';
-import type { Db } from '../../platform/db';
+import type { Db, Tx } from '../../platform/db';
 import { Errors } from '../../platform/errors';
 import type { Logger } from '../../platform/logger';
 import type { StorageService } from '../../platform/storage';
@@ -36,7 +36,7 @@ type MessageRow = {
 };
 
 export async function toMessage(
-  db: Db,
+  db: Tx,
   storage: StorageService,
   config: { MEDIA_URL_TTL_SECONDS: number },
   row: MessageRow,
@@ -73,7 +73,7 @@ export async function toMessage(
 }
 
 async function computeStatus(
-  db: Db,
+  db: Tx,
   row: MessageRow,
   viewerId: string,
 ): Promise<MessageDeliveryStatus> {
@@ -93,6 +93,16 @@ async function computeStatus(
   return 'sent';
 }
 
+/** True when Prisma rejected a write because a unique constraint was violated. */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: unknown }).code === 'P2002'
+  );
+}
+
 export class MessagesService {
   constructor(
     private readonly db: Db,
@@ -106,47 +116,78 @@ export class MessagesService {
     const conversations = new ConversationsService(this.db);
     await conversations.requireMembership(input.conversationId, senderId);
 
-    const existing = await this.db.message.findUnique({
-      where: {
-        conversationId_senderId_clientId: {
-          conversationId: input.conversationId,
-          senderId,
-          clientId: input.clientId,
-        },
-      },
-      include: { attachment: true },
-    });
-    if (existing) {
-      return toMessage(this.db, this.storage, this.config, existing, senderId);
-    }
+    // The idempotency lookup, attachment validation, insert and the
+    // conversation's last-message pointer must land together: if the update
+    // failed after the insert, the message would be permanently invisible in
+    // the conversation list. One transaction keeps the write set atomic.
+    let message: MessageRow;
+    try {
+      message = await this.db.$transaction(async (tx) => {
+        const existing = await tx.message.findUnique({
+          where: {
+            conversationId_senderId_clientId: {
+              conversationId: input.conversationId,
+              senderId,
+              clientId: input.clientId,
+            },
+          },
+          include: { attachment: true },
+        });
+        if (existing) {
+          return existing;
+        }
 
-    let attachmentId: string | null = null;
-    if (input.attachmentId) {
-      const attachment = await this.db.mediaAttachment.findUnique({
-        where: { id: input.attachmentId },
+        let attachmentId: string | null = null;
+        if (input.attachmentId) {
+          const attachment = await tx.mediaAttachment.findUnique({
+            where: { id: input.attachmentId },
+          });
+          if (!attachment || attachment.ownerId !== senderId || attachment.status !== 'COMPLETED') {
+            throw Errors.badRequest('Attachment not found or not ready');
+          }
+          attachmentId = attachment.id;
+        }
+
+        const created = await tx.message.create({
+          data: {
+            conversationId: input.conversationId,
+            senderId,
+            clientId: input.clientId,
+            kind: input.kind.toUpperCase() as 'TEXT' | 'IMAGE' | 'AUDIO',
+            body: input.body ?? null,
+            attachmentId,
+          },
+          include: { attachment: true },
+        });
+
+        await tx.conversation.update({
+          where: { id: input.conversationId },
+          data: { lastMessageId: created.id, lastActivityAt: created.createdAt },
+        });
+
+        return created;
       });
-      if (!attachment || attachment.ownerId !== senderId || attachment.status !== 'COMPLETED') {
-        throw Errors.badRequest('Attachment not found or not ready');
+    } catch (err) {
+      // A concurrent retry with the same clientId can slip past the in-transaction
+      // lookup and lose the unique-constraint race. Resolve it to the winner's row
+      // so sends stay idempotent.
+      if (isUniqueViolation(err)) {
+        const existing = await this.db.message.findUnique({
+          where: {
+            conversationId_senderId_clientId: {
+              conversationId: input.conversationId,
+              senderId,
+              clientId: input.clientId,
+            },
+          },
+          include: { attachment: true },
+        });
+        if (existing) {
+          return toMessage(this.db, this.storage, this.config, existing, senderId);
+        }
       }
-      attachmentId = attachment.id;
+      throw err;
     }
-
-    const message = await this.db.message.create({
-      data: {
-        conversationId: input.conversationId,
-        senderId,
-        clientId: input.clientId,
-        kind: input.kind.toUpperCase() as 'TEXT' | 'IMAGE' | 'AUDIO',
-        body: input.body ?? null,
-        attachmentId,
-      },
-      include: { attachment: true },
-    });
-
-    await this.db.conversation.update({
-      where: { id: input.conversationId },
-      data: { lastMessageId: message.id, lastActivityAt: message.createdAt },
-    });
 
     const payload = await toMessage(this.db, this.storage, this.config, message, senderId);
 
@@ -249,82 +290,94 @@ export class MessagesService {
     // Receipts are only meaningful for messages from OTHER participants of this
     // conversation. Enforced against the database rather than trusting the
     // caller's payload, so a malformed or forged socket event can never create
-    // a self-receipt or a cross-conversation one.
-    const deliverable = await this.db.message.findMany({
-      where: {
-        id: { in: messageIds },
-        conversationId,
-        senderId: { not: userId },
-      },
-      select: { id: true },
-    });
-    if (deliverable.length === 0) return;
+    // a self-receipt or a cross-conversation one. The guard lookup and the
+    // upserts share one transaction so they observe the same snapshot, and every
+    // receipt is stamped with the same timestamp.
+    const deliveredIds = await this.db.$transaction(async (tx) => {
+      const deliverable = await tx.message.findMany({
+        where: {
+          id: { in: messageIds },
+          conversationId,
+          senderId: { not: userId },
+        },
+        select: { id: true },
+      });
+      if (deliverable.length === 0) return [];
 
-    const ids = deliverable.map((message) => message.id);
-    await Promise.all(
-      ids.map((messageId) =>
-        this.db.messageReceipt.upsert({
+      const ids = deliverable.map((message) => message.id);
+      const now = new Date();
+      for (const messageId of ids) {
+        await tx.messageReceipt.upsert({
           where: { messageId_userId: { messageId, userId } },
-          create: { messageId, userId, deliveredAt: new Date() },
-          update: { deliveredAt: new Date() },
-        }),
-      ),
-    );
-    await this.emitStatus(conversationId, ids, 'delivered');
+          create: { messageId, userId, deliveredAt: now },
+          update: { deliveredAt: now },
+        });
+      }
+      return ids;
+    });
+
+    if (deliveredIds.length === 0) return;
+
+    await this.emitStatus(conversationId, deliveredIds, 'delivered');
   }
 
   async markRead(conversationId: string, userId: string, upToMessageId?: string) {
     const conversations = new ConversationsService(this.db);
     await conversations.requireMembership(conversationId, userId);
 
-    let targetId = upToMessageId;
-    if (!targetId) {
-      const latest = await this.db.message.findFirst({
-        where: { conversationId },
-        orderBy: { sequence: 'desc' },
+    // Resolving the target, stamping every unread receipt and advancing the
+    // participant's read marker is one unit: a partial read would either leave
+    // messages unread forever or move lastReadMessageId past receipts that were
+    // never written. Everything through the marker update runs in one
+    // transaction; only side effects (socket emits) happen after commit.
+    const result = await this.db.$transaction(async (tx) => {
+      let targetId = upToMessageId;
+      if (!targetId) {
+        const latest = await tx.message.findFirst({
+          where: { conversationId },
+          orderBy: { sequence: 'desc' },
+          select: { id: true },
+        });
+        targetId = latest?.id;
+      }
+      if (!targetId) return null;
+
+      const target = await tx.message.findUnique({ where: { id: targetId } });
+      if (!target || target.conversationId !== conversationId) {
+        throw Errors.badRequest('Message does not belong to this conversation');
+      }
+
+      const unread = await tx.message.findMany({
+        where: {
+          conversationId,
+          senderId: { not: userId },
+          sequence: { lte: target.sequence },
+          receipts: { none: { userId, readAt: { not: null } } },
+        },
         select: { id: true },
       });
-      targetId = latest?.id;
-    }
-    if (!targetId) return;
 
-    const target = await this.db.message.findUnique({ where: { id: targetId } });
-    if (!target || target.conversationId !== conversationId) {
-      throw Errors.badRequest('Message does not belong to this conversation');
-    }
-
-    const unread = await this.db.message.findMany({
-      where: {
-        conversationId,
-        senderId: { not: userId },
-        sequence: { lte: target.sequence },
-        receipts: { none: { userId, readAt: { not: null } } },
-      },
-      select: { id: true },
-    });
-
-    const now = new Date();
-    await Promise.all(
-      unread.map((m) =>
-        this.db.messageReceipt.upsert({
-          where: { messageId_userId: { messageId: m.id, userId } },
-          create: { messageId: m.id, userId, deliveredAt: now, readAt: now },
+      const now = new Date();
+      for (const message of unread) {
+        await tx.messageReceipt.upsert({
+          where: { messageId_userId: { messageId: message.id, userId } },
+          create: { messageId: message.id, userId, deliveredAt: now, readAt: now },
           update: { readAt: now },
-        }),
-      ),
-    );
+        });
+      }
 
-    await this.db.conversationParticipant.update({
-      where: { conversationId_userId: { conversationId, userId } },
-      data: { lastReadMessageId: targetId },
+      await tx.conversationParticipant.update({
+        where: { conversationId_userId: { conversationId, userId } },
+        data: { lastReadMessageId: targetId },
+      });
+
+      return { unreadIds: unread.map((message) => message.id) };
     });
 
-    if (unread.length > 0) {
-      await this.emitStatus(
-        conversationId,
-        unread.map((m) => m.id),
-        'read',
-      );
+    if (!result) return;
+
+    if (result.unreadIds.length > 0) {
+      await this.emitStatus(conversationId, result.unreadIds, 'read');
     }
 
     // Push the reader's own summary so their unread badge clears immediately.

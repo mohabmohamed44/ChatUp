@@ -35,10 +35,13 @@ export class AuthService {
       throw Errors.conflict('An account with this email already exists');
     }
     const passwordHash = await hashPassword(input.password);
-    const user = await this.db.user.create({
-      data: { email: input.email, passwordHash, displayName: input.displayName },
+    const { user, session } = await this.db.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: { email: input.email, passwordHash, displayName: input.displayName },
+      });
+      const createdSession = await createSession(tx, this.config, created.id);
+      return { user: created, session: createdSession };
     });
-    const session = await createSession(this.db, this.config, user.id);
     return { user: toAuthUser(user), session };
   }
 

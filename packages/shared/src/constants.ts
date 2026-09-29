@@ -23,7 +23,10 @@ export const LIMITS = {
   TYPING_EMIT_THROTTLE_MS: 2000,
   TYPING_INDICATOR_TTL_MS: 6000,
 
-  PRESENCE_GRACE_MS: 30_000,
+  // Debounce before broadcasting "offline": long enough to ride out a fast
+  // reconnect (page refresh), short enough that partners see "Offline"
+  // within the 2s real-time SLA without needing a refresh.
+  PRESENCE_GRACE_MS: 3_000,
   PRESENCE_SNAPSHOT_MAX_IDS: 200,
 
   SESSION_COOKIE_NAME: 'chatup_session',

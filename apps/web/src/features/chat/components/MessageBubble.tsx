@@ -43,8 +43,8 @@ export function MessageBubble({
             'rounded-2xl text-sm shadow-sm',
             isMediaOnly ? 'px-1.5 py-1.5' : 'px-3.5 py-2',
             isOwn
-              ? 'rounded-br-md bg-indigo-600 text-white'
-              : 'rounded-bl-md border border-slate-200 bg-white text-slate-900',
+              ? 'bg-indigo-600 text-white ltr:rounded-br-md rtl:rounded-bl-md'
+              : 'border border-slate-200 bg-white text-slate-900 ltr:rounded-bl-md rtl:rounded-br-md',
           )}
         >
           {message.kind === 'image' && attachment ? (
