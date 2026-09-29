@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/shared/providers/AuthProvider';
+import { LocaleProvider } from '@/shared/providers/LocaleProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -18,9 +19,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} min-h-dvh antialiased`} suppressHydrationWarning>
-        <AuthProvider>{children}</AuthProvider>
+    <html lang="en" dir="ltr" suppressHydrationWarning>
+      <body className={`${inter.className} min-h-dvh antialiased`}>
+        <LocaleProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

@@ -7,6 +7,7 @@ import { useAuth } from '@/features/auth';
 import { usePresence } from '@/features/chat/hooks/usePresence';
 import { initialsOf } from '@/shared/lib/format';
 import { useConversations } from '../hooks/useConversations';
+import { LanguageToggle } from '@/shared/components/LanguageToggle';
 import { ConversationItem } from './ConversationItem';
 import { NewChatSearch } from './NewChatSearch';
 
@@ -40,15 +41,18 @@ export function ConversationList() {
           </span>
           <span className="text-base font-semibold tracking-tight text-slate-900">ChatUp</span>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleLogout()}
-          aria-label="Log out"
-          title="Log out"
-          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-        >
-          <LogOut className="h-4 w-4" aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-2">
+          <LanguageToggle />
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            aria-label="Log out"
+            title="Log out"
+            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
       </header>
 
       {isNewChatOpen ? (

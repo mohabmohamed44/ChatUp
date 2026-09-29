@@ -96,7 +96,7 @@ export function MessageComposer({
           aria-label="Send message"
           className="rounded-full bg-indigo-600 p-2.5 text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <SendHorizontal className="h-5 w-5" aria-hidden="true" />
+          <SendHorizontal className="h-5 w-5 rtl:-scale-x-100" aria-hidden="true" />
         </button>
       </div>
       <p

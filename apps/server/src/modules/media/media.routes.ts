@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Router, type RequestHandler } from 'express';
 import multer from 'multer';
 import { LIMITS, type MediaUploadResult } from '@chatup/shared';
@@ -112,21 +113,18 @@ export function createMediaModule(deps: {
         throw Errors.badRequest('Audio messages require a valid durationMs');
       }
 
+      const attachmentId = randomUUID();
+      const storageKey = `attachments/${attachmentId}`;
       const attachment = await db.mediaAttachment.create({
         data: {
+          id: attachmentId,
           ownerId: auth.userId,
           kind: kind.toUpperCase() as 'IMAGE' | 'AUDIO',
           mimeType: detected,
           sizeBytes: file.size,
-          storageKey: "",
+          storageKey,
           durationMs: kind === 'audio' ? durationMs : null,
         },
-      });
-
-      const storageKey = `attachments/${attachment.id}`;
-      await db.mediaAttachment.update({
-        where: { id: attachment.id },
-        data: { storageKey },
       });
 
       try {

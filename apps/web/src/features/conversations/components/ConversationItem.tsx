@@ -46,7 +46,7 @@ export function ConversationItem({
           <span
             aria-hidden="true"
             className={cn(
-              'absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white',
+              'absolute -bottom-0.5 h-3.5 w-3.5 rounded-full border-2 border-white ltr:-right-0.5 rtl:-left-0.5',
               presence === 'online' ? 'bg-emerald-500' : 'bg-slate-300',
             )}
           />

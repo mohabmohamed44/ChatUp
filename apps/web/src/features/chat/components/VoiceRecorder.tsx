@@ -71,7 +71,7 @@ export function VoiceRecorder({ onRecorded, disabled = false }: Props) {
           aria-label="Stop recording"
           className="rounded-full bg-indigo-600 p-2 text-white hover:bg-indigo-500"
         >
-          <Send className="h-4 w-4" />
+          <Send className="h-4 w-4 rtl:-scale-x-100" />
         </button>
       </div>
     );
@@ -96,10 +96,10 @@ export function VoiceRecorder({ onRecorded, disabled = false }: Props) {
         aria-label="Send voice message"
         className="shrink-0 rounded-full bg-indigo-600 p-2 text-white hover:bg-indigo-500 disabled:opacity-40"
       >
-        {uploading ? `${progress}%` : <Send className="h-4 w-4" />}
+        {uploading ? `${progress}%` : <Send className="h-4 w-4 rtl:-scale-x-100" />}
       </button>
       {(error || localError) && (
-        <span className="absolute -top-6 left-3 rounded bg-red-50 px-2 py-1 text-xs text-red-700">
+        <span className="absolute -top-6 rounded bg-red-50 px-2 py-1 text-xs text-red-700 ltr:left-3 rtl:right-3">
           {localError ?? error}
         </span>
       )}
