@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-dvh antialiased`}>
+      <body className={`${inter.className} min-h-dvh antialiased`} suppressHydrationWarning>
         <LocaleProvider>
           <AuthProvider>{children}</AuthProvider>
         </LocaleProvider>

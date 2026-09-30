@@ -1,9 +1,14 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, Pause } from 'lucide-react';
 import type { Attachment } from '@chatup/shared';
 import { cn } from '@/shared/lib/utils';
+import {
+  releaseAudio,
+  requestExclusivePlay,
+  stopAllVoicePlayback,
+} from '../lib/voicePlayback';
 
 function formatMs(ms: number): string {
   if (!ms || ms < 0) return '0:00';
@@ -32,11 +37,31 @@ export function VoiceMessage({
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
-      void audio.play();
+      // Pause any other voice message before starting this one (WhatsApp behavior).
+      requestExclusivePlay(audio);
+      void audio.play().catch(() => {});
     } else {
       audio.pause();
     }
   }
+
+  // Stop playback when the message unmounts (chat closed or conversation
+  // switched) so audio never keeps playing in the background.
+  useEffect(() => {
+    const audio = audioRef.current;
+    return () => {
+      if (audio) {
+        try {
+          audio.pause();
+        } catch {
+          // ignore
+        }
+        releaseAudio(audio);
+      } else {
+        stopAllVoicePlayback();
+      }
+    };
+  }, []);
 
   if (!attachment.url) {
     return (
@@ -97,8 +122,15 @@ export function VoiceMessage({
         ref={audioRef}
         src={attachment.url}
         preload="metadata"
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPlay={(e) => {
+          // Covers native controls / programmatic play: keep playback exclusive.
+          requestExclusivePlay(e.currentTarget);
+          setPlaying(true);
+        }}
+        onPause={(e) => {
+          releaseAudio(e.currentTarget);
+          setPlaying(false);
+        }}
         onEnded={() => {
           setPlaying(false);
           setCurrentMs(0);
