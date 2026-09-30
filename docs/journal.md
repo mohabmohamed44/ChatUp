@@ -482,3 +482,67 @@ Now colors depend on `isOwn`.
 - Message editing with editedAt column and message:edit event
 - Local cache with IndexedDB
 - PWA + FCM
+
+## 2026-09-30 — Transactions, RTL, timestamps, Docker
+
+### Fixed
+
+**Database transactions**
+- `auth.register` — user + session creation now atomic
+- `media upload` — attachment create + storageKey update atomic
+- `messages.send` — insert, conversation pointer, receipts atomic
+- `messages.markDelivered` — receipt upserts in one transaction with a
+  shared timestamp
+- `messages.markRead` — read markers and participant pointer atomic
+- Idempotency: replaced find-then-create with try/catch on P2002.
+  Concurrent retries with the same clientId now resolve to the winner
+  row instead of racing.
+
+**Presence grace period**
+- `LIMITS.PRESENCE_GRACE_MS`: 30_000 → 3_000
+- Offline updates now reach partners in real time instead of requiring
+  a page refresh. 3s rides out a page refresh but still delivers
+  offline for genuine disconnects.
+
+**Docker**
+- Docker Desktop context override caused `docker` CLI to look at
+  `~/.docker/desktop/docker.sock` instead of `/var/run/docker.sock`.
+  Switched back to `default` context.
+- Zombie `docker-pr` processes held ports 5432, 6379, and 4443 after
+  daemon restarts. Freed with `fuser -k`.
+
+### Added
+
+**RTL support (apps/web)**
+- `LocaleProvider` sets `dir` and `lang` on `<html>`
+- Language toggle in the conversation list header
+- Physical CSS replaced with logical properties across components
+  (`left-` → `start-`, `pl-` → `ps-`, etc.)
+- Directional icons rotate with `rtl:rotate-180` (ArrowLeft, SendHorizontal)
+- Placeholder alignment follows UI direction
+
+**Timestamp formatting**
+- Single source of truth in `apps/web/src/shared/lib/format.ts`
+- Three functions: `formatListTimestamp`, `formatBubbleTimestamp`,
+  `formatFullTimestamp`
+- List: Now → 5m → 10:35 AM → Yesterday → Mon → Sep 24
+- Bubble: 10:35 AM → Yesterday 10:35 AM → Mon 10:35 AM → Sep 24
+- Full: Thursday, September 24, 2026 at 10:35 AM
+- Arabic localization via `Intl` with `ar-EG-u-nu-latn` (Western digits)
+- Formatters cached per locale to avoid re-construction on render
+- `formatMessageTime` kept as backwards-compatible alias
+
+### Verified
+
+- Register a new user → exactly 1 session created
+- Rollback test: forced throw inside transaction → no user row written
+- RTL toggle flips sidebar, icons, bubbles, placeholders correctly
+- Alice closes tab → Bob sees Offline in ~3s (no refresh)
+- Alice refreshes → Bob does not see a flicker
+- Timestamps show correct labels in both English and Arabic
+
+### Next
+- 50-user concurrency test (`scripts/test-concurrent-sends.ts`)
+- 100-user load test with Artillery
+- Voice draft persistence
+- Message editing
