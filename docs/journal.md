@@ -410,11 +410,16 @@ Now colors depend on `isOwn`.
 - PWA + FCM for push notifications
 - Message queues for async work (only when needed)
 
+
+
 ## 2026-09-28 — Design documentation
+
+
 
 ### Built
 
 **Conceptual ERD (Chen notation)**
+
 - 7 entities as rectangles: User, Session, Conversation, ConversationParticipant, Message, MessageReceipt, MediaAttachment
 - Attributes as ellipses, with primary keys underlined
 - Composite primary keys on ConversationParticipant and MessageReceipt
@@ -423,12 +428,14 @@ Now colors depend on `isOwn`.
 - Uses draw.io (source + PDF export)
 
 **Physical ERD (relational schema)**
+
 - Same 7 entities, but showing actual columns and types
 - UUID primary keys, foreign keys marked, unique constraints marked
 - Indexes and composite keys documented
 - Uses `erDiagram` syntax + draw.io
 
 **System Architecture (three tiers)**
+
 - Client tier: Browser, React UI, AuthProvider, Socket.IO Client, HTTP client
 - Application tier: Express API, Socket.IO Server, Auth Middleware, Feature Modules, Platform Layer
 - Data tier: PostgreSQL, Redis, Object Storage
@@ -436,6 +443,7 @@ Now colors depend on `isOwn`.
 - Color-coded by tier (blue / yellow / green)
 
 **Modular Monolith diagram**
+
 - Shows three packages: apps/web, apps/server, packages/shared
 - Feature modules listed: auth, conversations, messages, media, presence, users
 - Platform layer: config, db, storage, logger, http, errors
@@ -443,6 +451,7 @@ Now colors depend on `isOwn`.
 - Rule: dependencies point inward only
 
 **GCP Deployment Topology**
+
 - HTTPS Load Balancer with managed SSL
 - Cloud CDN for frontend static assets
 - Compute Engine e2-small VM for backend
@@ -452,18 +461,25 @@ Now colors depend on `isOwn`.
 - Artifact Registry, Secret Manager, Cloud Logging
 
 **Docker Compose architecture**
+
 - Local dev: postgres, redis, fake-gcs (infra only)
 - Full stack: infra + api + web containers
 - Service names and ports labeled
 - One network, service-name DNS
 
+
+
 ### Fixed
+
 - `Auth (Argon2)` → `Auth (scrypt)` in the architecture diagrams.
-  The code uses scrypt (N=16384, r=8, p=1), not Argon2.
+The code uses scrypt (N=16384, r=8, p=1), not Argon2.
 - Cardinality labels on `Message ↔ MediaAttachment` (0..1 : 1) and
-  `Message ↔ ConversationParticipant` (Many : 0..1) corrected.
+`Message ↔ ConversationParticipant` (Many : 0..1) corrected.
+
+
 
 ### Verified
+
 - Every entity in the conceptual ERD matches `schema.prisma`
 - All 11 relationships present with correct cardinality
 - Primary keys underlined; composite keys marked
@@ -471,66 +487,85 @@ Now colors depend on `isOwn`.
 - Modular monolith structure matches `apps/` and `packages/` layout
 - GCP topology uses only services in the planned deployment
 
+
+
 ### Notes
+
 - Diagrams stored in `docs/diagrams/` with both `.drawio` sources and `.png` exports
 - Eraser.io used to generate the initial drafts, then refined in draw.io
 - PDFs merged into a single file for delivery to Mr. Mohammed
 - Source files committed so the diagrams can be edited later
 
+
+
 ### Next
+
 - Voice draft persistence
 - Message editing with editedAt column and message:edit event
 - Local cache with IndexedDB
 - PWA + FCM
 
+
+
 ## 2026-09-30 — Transactions, RTL, timestamps, Docker
+
+
 
 ### Fixed
 
 **Database transactions**
+
 - `auth.register` — user + session creation now atomic
 - `media upload` — attachment create + storageKey update atomic
 - `messages.send` — insert, conversation pointer, receipts atomic
 - `messages.markDelivered` — receipt upserts in one transaction with a
-  shared timestamp
+shared timestamp
 - `messages.markRead` — read markers and participant pointer atomic
 - Idempotency: replaced find-then-create with try/catch on P2002.
-  Concurrent retries with the same clientId now resolve to the winner
-  row instead of racing.
+Concurrent retries with the same clientId now resolve to the winner
+row instead of racing.
 
 **Presence grace period**
+
 - `LIMITS.PRESENCE_GRACE_MS`: 30_000 → 3_000
 - Offline updates now reach partners in real time instead of requiring
-  a page refresh. 3s rides out a page refresh but still delivers
-  offline for genuine disconnects.
+a page refresh. 3s rides out a page refresh but still delivers
+offline for genuine disconnects.
 
 **Docker**
+
 - Docker Desktop context override caused `docker` CLI to look at
-  `~/.docker/desktop/docker.sock` instead of `/var/run/docker.sock`.
-  Switched back to `default` context.
+`~/.docker/desktop/docker.sock` instead of `/var/run/docker.sock`.
+Switched back to `default` context.
 - Zombie `docker-pr` processes held ports 5432, 6379, and 4443 after
-  daemon restarts. Freed with `fuser -k`.
+daemon restarts. Freed with `fuser -k`.
+
+
 
 ### Added
 
 **RTL support (apps/web)**
+
 - `LocaleProvider` sets `dir` and `lang` on `<html>`
 - Language toggle in the conversation list header
 - Physical CSS replaced with logical properties across components
-  (`left-` → `start-`, `pl-` → `ps-`, etc.)
+(`left-` → `start-`, `pl-` → `ps-`, etc.)
 - Directional icons rotate with `rtl:rotate-180` (ArrowLeft, SendHorizontal)
 - Placeholder alignment follows UI direction
 
 **Timestamp formatting**
+
 - Single source of truth in `apps/web/src/shared/lib/format.ts`
 - Three functions: `formatListTimestamp`, `formatBubbleTimestamp`,
-  `formatFullTimestamp`
+`formatFullTimestamp`
 - List: Now → 5m → 10:35 AM → Yesterday → Mon → Sep 24
 - Bubble: 10:35 AM → Yesterday 10:35 AM → Mon 10:35 AM → Sep 24
 - Full: Thursday, September 24, 2026 at 10:35 AM
 - Arabic localization via `Intl` with `ar-EG-u-nu-latn` (Western digits)
 - Formatters cached per locale to avoid re-construction on render
 - `formatMessageTime` kept as backwards-compatible alias
+
+
 
 ### Verified
 
@@ -541,8 +576,96 @@ Now colors depend on `isOwn`.
 - Alice refreshes → Bob does not see a flicker
 - Timestamps show correct labels in both English and Arabic
 
+
+
 ### Next
-- 50-user concurrency test (`scripts/test-concurrent-sends.ts`)
-- 100-user load test with Artillery
+
 - Voice draft persistence
 - Message editing
+
+
+
+## 2026-10-01 — Voice draft persistence
+
+
+
+### Added
+
+`apps/web/src/shared/lib/drafts.ts` (new)
+
+- IndexedDB wrapper using the `idb` package
+- Database: `chatup-drafts`
+- Object store: `voiceDrafts`
+- Key: `conversationId` (one draft per conversation)
+- Value shape:
+
+```
+{
+  conversationId: string,
+  blob: Blob,
+  mimeType: string,
+  durationMs: number,
+  createdAt: number
+}
+```
+
+- Public functions:
+- `saveVoiceDraft(conversationId, blob, mimeType, durationMs)`
+- `getVoiceDraft(conversationId)`
+- `clearVoiceDraft(conversationId)`
+- `listVoiceDrafts()`
+- `pruneOldDrafts()` — removes drafts older than 24 hours
+
+
+
+### Wired
+
+- `useVoiceRecorder.ts` now calls `saveVoiceDraft` inside `recorder.onstop`,
+after the blob is created and before the preview state is set. The call
+is fire-and-forget with a `.catch()` so a storage failure never blocks
+the recording UI.
+- `VoiceRecorder.tsx` calls `clearVoiceDraft(conversationId)` on send and
+on discard.
+
+
+
+### Why IndexedDB
+
+- `localStorage` cannot store Blobs or binary data
+- `localStorage` is synchronous and blocks the main thread
+- IndexedDB persists across tab close and browser restart
+- IndexedDB has a larger quota (typically 50% of free disk)
+- One draft per conversation, keyed by `conversationId`
+
+
+
+### Verified
+
+- Record → Stop writes exactly one row to `chatup-drafts` → `voiceDrafts`
+- The row contains a non-empty Blob, the correct mimeType, durationMs,
+and a recent createdAt
+- Sending the message clears the row
+- Discarding clears the row
+- Closing the tab preserves the row
+- Two conversations produce two independent rows
+- Incognito and normal tabs have separate IndexedDB storage; drafts do
+not leak between them
+- Drafts older than 24 hours are removed on the next app load
+- If IndexedDB is unavailable (e.g., some private modes), the save fails
+silently and the recording still works
+
+
+
+### Notes
+
+- Blob is stored as-is, no base64 encoding
+- Storage is per browser context, not per user account
+- The feature is client-only; no backend or schema changes
+
+
+
+### Next
+
+- Message editing
+- Local cache for messages and conversations
+
