@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useEffect } from 'react';
 import { useAuth } from '@/features/auth';
 import { ChatHeader } from '@/features/chat/components/ChatHeader';
 import { MessageComposer } from '@/features/chat/components/MessageComposer';
@@ -12,6 +13,7 @@ import { useSendMessage } from '@/features/chat/hooks/useSendMessage';
 import { useSocketStatus } from '@/features/chat/hooks/useSocketStatus';
 import { useTyping } from '@/features/chat/hooks/useTyping';
 import { useConversations } from '@/features/conversations/hooks/useConversations';
+import { stopAllVoicePlayback } from '@/features/chat/lib/voicePlayback';
 
 export default function ConversationPage() {
   const params = useParams<{ id: string }>();
@@ -46,6 +48,13 @@ export default function ConversationPage() {
   const { isConnected } = useSocketStatus();
   const { typingUserIds, notifyTyping } = useTyping(conversationId, currentUserId);
   const presence = usePresence(participant ? [participant.id] : []);
+
+  // WhatsApp-like: leaving / switching the chat stops any playing voice note.
+  useEffect(() => {
+    return () => {
+      stopAllVoicePlayback();
+    };
+  }, [conversationId]);
 
   if (!user) return null;
 
@@ -106,6 +115,7 @@ export default function ConversationPage() {
       />
 
       <MessageComposer
+        conversationId={conversationId}
         onSend={(body) => sendMessage(body)}
         onTyping={notifyTyping}
         disabled={!isConnected}
