@@ -66,8 +66,28 @@ export class ConversationsService {
       },
     });
 
-    return Promise.all(
+    // Defensive fallback: if the lastMessage relation is null (stale NULL
+    // lastMessageId pointer left by a cleanup script), fetch the newest
+    // message so the list still shows a preview. Only runs for rows that
+    // actually need it — rows with a resolved lastMessage skip the query.
+    // NOTE: the task's suggested guard
+    // (`if (row.lastMessage || row.lastMessageId === null) return row`)
+    // is inverted — it would skip exactly the broken rows (pointer NULL).
+    // The correct check is below: repair whenever lastMessage is null.
+    const repaired = await Promise.all(
       rows.map(async (row) => {
+        if (row.lastMessage) return row;
+        const latest = await this.db.message.findFirst({
+          where: { conversationId: row.id },
+          orderBy: { sequence: 'desc' },
+        });
+        if (!latest) return row;
+        return { ...row, lastMessage: latest };
+      }),
+    );
+
+    return Promise.all(
+      repaired.map(async (row) => {
         const membership = await this.db.conversationParticipant.findUnique({
           where: { conversationId_userId: { conversationId: row.id, userId } },
           select: { lastReadMessage: { select: { sequence: true } } },
