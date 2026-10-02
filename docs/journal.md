@@ -669,3 +669,77 @@ silently and the recording still works
 - Message editing
 - Local cache for messages and conversations
 
+## 2026-10-03 — Concurrency verification, copy message, DB pointer fix
+
+### Concurrency verification
+
+Ran `apps/server/scripts/test-concurrent-sends.ts` with 50 parallel sends
+against the local stack.
+
+Results:
+- Sent: 50, OK: 50, Failed: 0
+- Total time: 949ms (19ms average per message)
+- Rows in DB: 50
+- Unique bodies: 50, Unique clientIds: 50
+
+Verdict: PASS. Confirms the transaction and idempotency work from
+2026-09-30 hold under concurrency. This is a correctness test, not a
+performance test — the full 100-user load test runs after Phase 6
+deployment.
+
+Script reads credentials from `.env`:
+- `SEED_USER_EMAIL`
+- `SEED_USER_PASSWORD`
+- `API_URL`
+
+Placeholders added to `.env.example`.
+
+### Copy message button
+
+Added in `apps/web/src/features/chat/components/MessageBubble.tsx`.
+
+- Copy icon appears on hover next to the timestamp
+- Uses `navigator.clipboard.writeText` with `execCommand` fallback
+- Icon becomes a checkmark for 1.5 seconds to confirm
+- Only shown for text messages with a non-empty body
+- Keyboard accessible (focus-visible) and screen-reader friendly
+  (`aria-label="Copy message"`)
+- Colors match the bubble: light on own, slate on other
+- `title` attribute removed to prevent the native tooltip from
+  overlaying the timestamp
+
+Verified: copy works on own and other messages, preserves newlines,
+emoji, and mixed Arabic/English text. No copy icon on image or voice
+messages.
+
+### Conversation list pointer fix
+
+**Problem:** Conversation `90bc4b06-...` had 44 messages in the DB but
+`lastMessageId` was NULL, so the list showed "No messages yet" even
+after a refresh.
+
+**Root cause:** A previous SQL cleanup nulled `lastMessageId` for
+messages matching a test pattern and did not re-populate it from the
+newest remaining message. The application code was correct — the bug
+was in the DB state.
+
+**Fix:**
+- Repair SQL repopulated `lastMessageId` and `lastActivityAt` from the
+  newest message per conversation
+- Added a defensive fallback in `loadRowsForUser()` in
+  `conversations.service.ts` — if `row.lastMessage` is null but
+  messages exist, it fetches the latest one before returning. The extra
+  query runs only for affected rows.
+
+**Verified:**
+- Fallback proven by temporarily re-nulling the pointer; the API still
+  returned the correct preview
+- `send()` updates the pointer on every message (verified with a
+  test send)
+- All 3 conversation rows now have a non-null `lastMessageId`
+- `npx tsc --noEmit` passes
+
+### Next
+- Message editing (schema + socket event + inline edit UI)
+- Local cache for messages and conversations
+- 100-user load test (after Phase 6 deployment)
