@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause } from 'lucide-react';
+import { Mic, Play, Pause } from 'lucide-react';
 import type { Attachment } from '@chatup/shared';
 import { cn } from '@/shared/lib/utils';
 import {
@@ -21,17 +21,38 @@ function formatMs(ms: number): string {
 export function VoiceMessage({
   attachment,
   isOwn,
+  playedAt,
+  playedTitle,
+  onPlayed,
 }: {
   attachment: Attachment;
   isOwn: boolean;
+  playedAt: string | null;
+  playedTitle?: string;
+  onPlayed?: () => void;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
+  const hasReported = useRef(playedAt !== null);
+
+  // WhatsApp-style: incoming unplayed notes show a blue mic. After listen
+  // (or for the sender once the recipient has listened) it turns muted.
+  const played = playedAt !== null;
+
+  useEffect(() => {
+    if (playedAt) hasReported.current = true;
+  }, [playedAt]);
 
   const totalMs = attachment.durationMs ?? 0;
   const remainingMs = Math.max(0, totalMs - currentMs);
   const progress = totalMs > 0 ? currentMs / totalMs : 0;
+
+  function reportPlayed() {
+    if (hasReported.current || isOwn) return;
+    hasReported.current = true;
+    onPlayed?.();
+  }
 
   function toggle() {
     const audio = audioRef.current;
@@ -78,6 +99,19 @@ export function VoiceMessage({
 
   return (
     <div className="flex min-w-[220px] items-center gap-3 py-1">
+      <span
+        title={played ? playedTitle ?? 'Played' : undefined}
+        aria-label={played ? playedTitle ?? 'Played' : undefined}
+        className="inline-flex shrink-0 items-center"
+      >
+        <Mic
+          className={cn(
+            'h-4 w-4',
+            isOwn ? (played ? 'text-sky-300' : 'text-white/60') : 'text-slate-400',
+          )}
+          aria-hidden="true"
+        />
+      </span>
       <button
         type="button"
         onClick={toggle}
@@ -102,7 +136,7 @@ export function VoiceMessage({
           <div
             className={cn(
               'h-full transition-[width] duration-100 ease-linear',
-              isOwn ? 'bg-white' : 'bg-indigo-600',
+              isOwn ? (played ? 'bg-sky-300' : 'bg-white') : 'bg-indigo-600',
             )}
             style={{ width: `${progress * 100}%` }}
           />
@@ -126,6 +160,7 @@ export function VoiceMessage({
           // Covers native controls / programmatic play: keep playback exclusive.
           requestExclusivePlay(e.currentTarget);
           setPlaying(true);
+          reportPlayed();
         }}
         onPause={(e) => {
           releaseAudio(e.currentTarget);

@@ -99,6 +99,8 @@ model Message {
   lastMessageOf Conversation[]   @relation("ConversationLastMessage")
   readMarkers  ConversationParticipant[] @relation("LastReadMessage")
   receipts     MessageReceipt[]
+  editedAt     DateTime?
+  deletedAt    DateTime?
 
   @@unique([conversationId, senderId, clientId])
   @@index([conversationId, sequence(sort: Desc)])
@@ -130,6 +132,7 @@ model MessageReceipt {
   userId       String
   deliveredAt  DateTime?
   readAt       DateTime?
+  playedAt     DateTime?
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

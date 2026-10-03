@@ -2,7 +2,6 @@
 
 import { Check, CheckCheck, Clock, AlertCircle } from 'lucide-react';
 import type { ClientMessageStatus } from '@chatup/shared';
-import { cn } from '@/shared/lib/utils';
 
 /**
  * Renders the delivery status indicator for an outgoing message.
@@ -22,7 +21,11 @@ const LABELS: Record<ClientMessageStatus, string> = {
   failed: 'Failed to send',
 };
 
-export function StatusIcon({ status }: { status: ClientMessageStatus }) {
+export function StatusIcon({
+  status,
+}: {
+  status: ClientMessageStatus;
+}) {
   const label = LABELS[status];
   const icon = (() => {
     switch (status) {

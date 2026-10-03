@@ -1,6 +1,7 @@
-import { LIMITS } from '@chatup/shared';
+import { LIMITS, MESSAGE_EVENTS, type Ack, type Message } from '@chatup/shared';
 import { apiFetch } from '@/shared/lib/api';
-import type { Attachment, Message, Page } from '@chatup/shared';
+import { getSocket } from '@/shared/lib/socket';
+import type { Attachment, Page } from '@chatup/shared';
 
 function readCookie(name: string): string | undefined {
   if (typeof document === 'undefined') return undefined;
@@ -42,4 +43,32 @@ export async function uploadMedia(file: File, kind: 'image' | 'audio', durationM
 
 export async function getMediaUrl(attachmentId: string): Promise<{url: string}> {
   return apiFetch<{url: string}>(`/media/${attachmentId}`);
+}
+
+export function editMessage(messageId: string, body: string): Promise<Ack<Message>> {
+  const socket = getSocket();
+  return new Promise((resolve) => {
+    socket.emit(MESSAGE_EVENTS.edit, { messageId, body }, resolve);
+  });
+}
+
+export function deleteMessage(messageId: string): Promise<Ack<Message>> {
+  const socket = getSocket();
+  return new Promise((resolve) => {
+    socket.emit(MESSAGE_EVENTS.delete, { messageId }, resolve);
+  });
+}
+
+export function markPlayed(
+  messageId: string,
+  conversationId: string,
+): Promise<Ack<null>> {
+  const socket = getSocket();
+  return new Promise((resolve) => {
+    socket.emit(
+      MESSAGE_EVENTS.played,
+      { messageId, conversationId },
+      resolve,
+    );
+  });
 }
