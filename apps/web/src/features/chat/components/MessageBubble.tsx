@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, EllipsisVertical, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Check, Copy, EllipsisVertical, Info, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { formatBubbleTimestamp, formatFullTimestamp } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { useLocale } from '@/shared/providers/LocaleProvider';
 import { ImageMessage } from './ImageMessage';
 import { MessageBody } from './MessageBody';
+import { MessageInfoModal } from './MessageInfoModal';
 import { VoiceMessage } from './VoiceMessage';
 import type { ChatMessage } from '../hooks/useConversationMessages';
 import { StatusIcon } from './StatusIcon';
@@ -54,11 +55,18 @@ export function MessageBubble({
     message.status !== 'failed' &&
     Date.now() - new Date(message.createdAt).getTime() < EDIT_WINDOW_MS;
   const canDelete = !isDeleted && isOwn;
-  const hasMenu = canEdit || canDelete;
+  const canShowInfo =
+    isOwn &&
+    message.kind === 'audio' &&
+    !isDeleted &&
+    message.status !== 'pending' &&
+    message.status !== 'failed';
+  const hasMenu = canEdit || canDelete || canShowInfo;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   // Close the menu on outside click or Escape, returning focus to the trigger.
   useEffect(() => {
@@ -127,6 +135,11 @@ export function MessageBubble({
                   attachment={attachment}
                   isOwn={isOwn}
                   playedAt={message.playedAt}
+                  playedTitle={
+                    message.playedAt
+                      ? `Played · ${formatFullTimestamp(message.playedAt, locale)}`
+                      : undefined
+                  }
                   onPlayed={() => onMarkPlayed?.(message.id)}
                 />
               ) : null}
@@ -195,6 +208,21 @@ export function MessageBubble({
                     aria-label="Message actions"
                     className="absolute end-0 top-full z-20 mt-1 min-w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
                   >
+                    {canShowInfo ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setInfoOpen(true);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-start text-xs text-slate-700 transition-colors hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-none"
+                      >
+                        <Info className="h-3 w-3" aria-hidden="true" />
+                        Info
+                      </button>
+                    ) : null}
+
                     {canEdit ? (
                       <button
                         type="button"
@@ -241,11 +269,19 @@ export function MessageBubble({
               </span>
             ) : null}
             {isOwn ? (
-              <StatusIcon
-                status={message.status}
-                isAudio={message.kind === 'audio'}
-                played={message.playedAt !== null}
-              />
+              canShowInfo ? (
+                <button
+                  type="button"
+                  onClick={() => setInfoOpen(true)}
+                  aria-label="Message info"
+                  title="Message info"
+                  className="inline-flex items-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  <StatusIcon status={message.status} />
+                </button>
+              ) : (
+                <StatusIcon status={message.status} />
+              )
             ) : null}
           </div>
         </div>
@@ -263,6 +299,10 @@ export function MessageBubble({
           </div>
         ) : null}
       </div>
+
+      {infoOpen ? (
+        <MessageInfoModal message={message} onClose={() => setInfoOpen(false)} />
+      ) : null}
     </div>
   );
 }

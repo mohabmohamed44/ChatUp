@@ -21,6 +21,8 @@ export interface Message {
   editedAt: ISODateString | null;
   deletedAt: ISODateString | null;
   playedAt: ISODateString | null;
+  deliveredAt: ISODateString | null;
+  readAt: ISODateString | null;
 }
 
 export interface MessagePreview {

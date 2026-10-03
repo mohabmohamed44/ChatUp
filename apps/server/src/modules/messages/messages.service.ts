@@ -62,6 +62,8 @@ export async function toMessage(
     };
   }
 
+  const receiptTimes = await computeReceiptTimes(db, row, viewerId);
+
   return {
     id: row.id,
     sequence: row.sequence.toString(),
@@ -76,6 +78,8 @@ export async function toMessage(
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     deletedAt: isDeleted ? row.deletedAt!.toISOString() : null,
     playedAt: (await computePlayedAt(db, row, viewerId))?.toISOString() ?? null,
+    deliveredAt: receiptTimes.deliveredAt?.toISOString() ?? null,
+    readAt: receiptTimes.readAt?.toISOString() ?? null,
   };
 }
 
@@ -103,8 +107,9 @@ async function computeStatus(
 }
 
 /**
- * Played state is sender-visible only: for the sender's own voice messages,
- * returns the recipient's playedAt (null when unplayed or not applicable).
+ * Voice played-at is role-specific:
+ * - Sender: when any recipient first listened (message-info modal).
+ * - Recipient: when this viewer listened (unplayed mic badge).
  * Deleted messages never report played state — their content is masked.
  */
 async function computePlayedAt(
@@ -113,14 +118,44 @@ async function computePlayedAt(
   viewerId: string,
 ): Promise<Date | null> {
   if (row.kind.toLowerCase() !== 'audio') return null;
-  if (row.senderId !== viewerId) return null;
   if (row.deletedAt !== null) return null;
 
-  const receipt = await db.messageReceipt.findFirst({
-    where: { messageId: row.id, playedAt: { not: null } },
+  if (row.senderId === viewerId) {
+    const receipt = await db.messageReceipt.findFirst({
+      where: { messageId: row.id, playedAt: { not: null } },
+      select: { playedAt: true },
+    });
+    return receipt?.playedAt ?? null;
+  }
+
+  const receipt = await db.messageReceipt.findUnique({
+    where: { messageId_userId: { messageId: row.id, userId: viewerId } },
     select: { playedAt: true },
   });
   return receipt?.playedAt ?? null;
+}
+
+/**
+ * Delivery/read timestamps for the message-info view. Sender-visible only;
+ * recipients and deleted messages report null (their content is masked).
+ * One query for both stamps; deliveredAt/readAt stamping logic is untouched.
+ */
+async function computeReceiptTimes(
+  db: Tx,
+  row: MessageRow,
+  viewerId: string,
+): Promise<{ deliveredAt: Date | null; readAt: Date | null }> {
+  if (row.senderId !== viewerId) return { deliveredAt: null, readAt: null };
+  if (row.deletedAt !== null) return { deliveredAt: null, readAt: null };
+
+  const receipt = await db.messageReceipt.findFirst({
+    where: { messageId: row.id },
+    select: { deliveredAt: true, readAt: true },
+  });
+  return {
+    deliveredAt: receipt?.deliveredAt ?? null,
+    readAt: receipt?.readAt ?? null,
+  };
 }
 
 /** True when Prisma rejected a write because a unique constraint was violated. */
@@ -380,27 +415,27 @@ export class MessagesService {
       throw Errors.badRequest('Only voice messages can be marked as played');
     }
 
-    // Idempotent: only the first play stamps a timestamp.
-    await this.db.messageReceipt.upsert({
-      where: { messageId_userId: { messageId, userId } },
-      create: { messageId, userId, playedAt: new Date() },
-      update: { playedAt: undefined }, // do not overwrite if already played
-    });
-
-    // Re-read to get the authoritative value (may be from an earlier play).
-    const receipt = await this.db.messageReceipt.findUnique({
+    // A delivered/read receipt often already exists. Prisma skips `undefined`
+    // fields, so we must set playedAt on first listen even when the row is old.
+    const existing = await this.db.messageReceipt.findUnique({
       where: { messageId_userId: { messageId, userId } },
       select: { playedAt: true },
     });
+    if (existing?.playedAt) return;
 
-    if (!receipt?.playedAt) return;
+    const now = new Date();
+    await this.db.messageReceipt.upsert({
+      where: { messageId_userId: { messageId, userId } },
+      create: { messageId, userId, playedAt: now },
+      update: { playedAt: now },
+    });
 
     this.io
       .to(SOCKET_ROOMS.conversation(conversationId))
       .emit(MESSAGE_EVENTS.played, {
         messageId,
         userId,
-        playedAt: receipt.playedAt.toISOString(),
+        playedAt: now.toISOString(),
       });
   }
 

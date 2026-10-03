@@ -165,8 +165,20 @@ export function useConversationMessages(conversationId: string, currentUserId: s
       setMessages((prev) =>
         prev.map((message) => {
           if (!affected.has(message.id)) return message;
-          if (STATUS_RANK[payload.status] <= STATUS_RANK[message.status]) return message;
-          return { ...message, status: payload.status };
+          const nextStatus =
+            STATUS_RANK[payload.status] > STATUS_RANK[message.status]
+              ? payload.status
+              : message.status;
+          return {
+            ...message,
+            status: nextStatus,
+            deliveredAt:
+              payload.status === 'delivered' || payload.status === 'read'
+                ? (message.deliveredAt ?? payload.at)
+                : message.deliveredAt,
+            readAt:
+              payload.status === 'read' ? (message.readAt ?? payload.at) : message.readAt,
+          };
         }),
       );
     }
@@ -196,7 +208,9 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     function onPlayed(payload: MessagePlayedUpdate) {
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === payload.messageId ? { ...m, playedAt: payload.playedAt } : m,
+          m.id === payload.messageId
+            ? { ...m, playedAt: m.playedAt ?? payload.playedAt }
+            : m,
         ),
       );
     }
@@ -388,13 +402,23 @@ export function useConversationMessages(conversationId: string, currentUserId: s
 
   const markPlayedAction = useCallback(
     async (messageId: string) => {
+      const previous = messagesRef.current.find((m) => m.id === messageId);
+      if (!previous || previous.playedAt || previous.senderId === currentUserId) return;
+
+      const playedAt = new Date().toISOString();
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, playedAt } : m)),
+      );
+
       const ack = await markPlayedRequest(messageId, conversationId);
       if (!ack.ok) {
-        // silent: played tracking is best-effort
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? previous : m)),
+        );
         console.warn('[played] failed', ack.error);
       }
     },
-    [conversationId],
+    [conversationId, currentUserId],
   );
 
   return {

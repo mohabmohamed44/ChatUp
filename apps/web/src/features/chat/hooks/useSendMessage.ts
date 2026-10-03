@@ -103,6 +103,8 @@ export function useSendMessage(
         editedAt: null,
         deletedAt: null,
         playedAt: null,
+        deliveredAt: null,
+        readAt: null,
       };
 
       onOptimistic(optimistic);
