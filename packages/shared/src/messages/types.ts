@@ -18,6 +18,9 @@ export interface Message {
   status: MessageDeliveryStatus;
   clientId: string | null;
   createdAt: ISODateString;
+  editedAt: ISODateString | null;
+  deletedAt: ISODateString | null;
+  playedAt: ISODateString | null;
 }
 
 export interface MessagePreview {
@@ -53,4 +56,24 @@ export interface MessageStatusUpdate {
   messageIds: string[];
   status: 'delivered' | 'read';
   at: ISODateString;
+}
+
+export interface EditMessagePayload {
+  messageId: string;
+  body: string;
+}
+
+export interface DeleteMessagePayload {
+  messageId: string;
+}
+
+export interface MarkPlayedPayload {
+  messageId: string;
+  conversationId: string;
+}
+
+export interface MessagePlayedUpdate {
+  messageId: string;
+  userId: string;
+  playedAt: ISODateString;
 }

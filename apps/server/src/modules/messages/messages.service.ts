@@ -1,6 +1,5 @@
 import {
   CONVERSATION_EVENTS,
-  LIMITS,
   MESSAGE_EVENTS,
   SOCKET_ROOMS,
   type Attachment,
@@ -24,6 +23,8 @@ type MessageRow = {
   body: string | null;
   clientId: string | null;
   createdAt: Date;
+  editedAt: Date | null;
+  deletedAt: Date | null;
   attachment: {
     id: string;
     kind: string;
@@ -42,8 +43,10 @@ export async function toMessage(
   row: MessageRow,
   viewerId: string,
 ): Promise<Message> {
+  const isDeleted = row.deletedAt !== null;
+
   let attachment: Attachment | null = null;
-  if (row.attachment) {
+  if (!isDeleted && row.attachment) {
     attachment = {
       id: row.attachment.id,
       kind: row.attachment.kind.toLowerCase() as Attachment['kind'],
@@ -58,17 +61,21 @@ export async function toMessage(
       ),
     };
   }
+
   return {
     id: row.id,
     sequence: row.sequence.toString(),
     conversationId: row.conversationId,
     senderId: row.senderId,
     kind: row.kind.toLowerCase() as Message['kind'],
-    body: row.body,
+    body: isDeleted ? null : row.body,
     attachment,
     status: await computeStatus(db, row, viewerId),
     clientId: row.clientId,
     createdAt: row.createdAt.toISOString(),
+    editedAt: row.editedAt ? row.editedAt.toISOString() : null,
+    deletedAt: isDeleted ? row.deletedAt!.toISOString() : null,
+    playedAt: (await computePlayedAt(db, row, viewerId))?.toISOString() ?? null,
   };
 }
 
@@ -83,14 +90,37 @@ async function computeStatus(
       select: { readAt: true },
     });
     if (recipientRead) return 'read';
+
     const recipientDelivered = await db.messageReceipt.findFirst({
       where: { messageId: row.id, deliveredAt: { not: null } },
       select: { deliveredAt: true },
     });
     if (recipientDelivered) return 'delivered';
+
     return 'sent';
   }
   return 'sent';
+}
+
+/**
+ * Played state is sender-visible only: for the sender's own voice messages,
+ * returns the recipient's playedAt (null when unplayed or not applicable).
+ * Deleted messages never report played state — their content is masked.
+ */
+async function computePlayedAt(
+  db: Tx,
+  row: MessageRow,
+  viewerId: string,
+): Promise<Date | null> {
+  if (row.kind.toLowerCase() !== 'audio') return null;
+  if (row.senderId !== viewerId) return null;
+  if (row.deletedAt !== null) return null;
+
+  const receipt = await db.messageReceipt.findFirst({
+    where: { messageId: row.id, playedAt: { not: null } },
+    select: { playedAt: true },
+  });
+  return receipt?.playedAt ?? null;
 }
 
 /** True when Prisma rejected a write because a unique constraint was violated. */
@@ -111,6 +141,10 @@ export class MessagesService {
     private readonly config: { MEDIA_URL_TTL_SECONDS: number },
     private readonly logger: Logger,
   ) {}
+
+  // ---------------------------------------------------------------------------
+  // Send
+  // ---------------------------------------------------------------------------
 
   async send(input: SendMessageInput, senderId: string): Promise<Message> {
     const conversations = new ConversationsService(this.db);
@@ -142,7 +176,11 @@ export class MessagesService {
           const attachment = await tx.mediaAttachment.findUnique({
             where: { id: input.attachmentId },
           });
-          if (!attachment || attachment.ownerId !== senderId || attachment.status !== 'COMPLETED') {
+          if (
+            !attachment ||
+            attachment.ownerId !== senderId ||
+            attachment.status !== 'COMPLETED'
+          ) {
             throw Errors.badRequest('Attachment not found or not ready');
           }
           attachmentId = attachment.id;
@@ -189,7 +227,13 @@ export class MessagesService {
       throw err;
     }
 
-    const payload = await toMessage(this.db, this.storage, this.config, message, senderId);
+    const payload = await toMessage(
+      this.db,
+      this.storage,
+      this.config,
+      message,
+      senderId,
+    );
 
     this.io
       .to(SOCKET_ROOMS.conversation(input.conversationId))
@@ -199,6 +243,170 @@ export class MessagesService {
 
     return payload;
   }
+
+  // ---------------------------------------------------------------------------
+  // Edit
+  // ---------------------------------------------------------------------------
+
+  private static readonly EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+  async editMessage(
+    messageId: string,
+    userId: string,
+    newBody: string,
+  ): Promise<Message> {
+    const message = await this.db.message.findUnique({
+      where: { id: messageId },
+      include: { attachment: true },
+    });
+
+    if (!message) throw Errors.notFound('Message');
+    if (message.senderId !== userId) {
+      throw Errors.forbidden('You can only edit your own messages');
+    }
+    if (message.deletedAt) {
+      throw Errors.badRequest('Cannot edit a deleted message');
+    }
+    if (message.kind !== 'TEXT') {
+      throw Errors.badRequest('Only text messages can be edited');
+    }
+
+    const ageMs = Date.now() - message.createdAt.getTime();
+    if (ageMs > MessagesService.EDIT_WINDOW_MS) {
+      throw Errors.badRequest('Messages can only be edited within 15 minutes');
+    }
+
+    const updated = await this.db.message.update({
+      where: { id: messageId },
+      data: { body: newBody, editedAt: new Date() },
+      include: { attachment: true },
+    });
+
+    const payload = await toMessage(
+      this.db,
+      this.storage,
+      this.config,
+      updated,
+      userId,
+    );
+
+    // Notify the conversation participants in real time.
+    this.io
+      .to(SOCKET_ROOMS.conversation(message.conversationId))
+      .emit(MESSAGE_EVENTS.edited, { message: payload });
+
+    // If the edited message is the last one, the conversation-list preview
+    // must reflect the new text. Emit an updated summary to every participant.
+    await this.emitConversationUpdate(message.conversationId);
+
+    return payload;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Delete
+  // ---------------------------------------------------------------------------
+
+  async deleteMessage(messageId: string, userId: string): Promise<Message> {
+    const message = await this.db.message.findUnique({
+      where: { id: messageId },
+      include: { attachment: true },
+    });
+
+    if (!message) throw Errors.notFound('Message');
+    if (message.senderId !== userId) {
+      throw Errors.forbidden('You can only delete your own messages');
+    }
+    if (message.deletedAt) {
+      // Idempotent: return existing state
+      return toMessage(this.db, this.storage, this.config, message, userId);
+    }
+
+    const updated = await this.db.message.update({
+      where: { id: messageId },
+      data: {
+        deletedAt: new Date(),
+        body: null,
+        attachmentId: null,
+      },
+      include: { attachment: true },
+    });
+
+    const payload = await toMessage(
+      this.db,
+      this.storage,
+      this.config,
+      updated,
+      userId,
+    );
+
+    this.io
+      .to(SOCKET_ROOMS.conversation(message.conversationId))
+      .emit(MESSAGE_EVENTS.deleted, { message: payload });
+
+    // If the deleted message was the last one, the conversation preview must
+    // be refreshed for every participant.
+    await this.emitConversationUpdate(message.conversationId);
+
+    return payload;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Played
+  // ---------------------------------------------------------------------------
+
+  async markPlayed(
+    conversationId: string,
+    userId: string,
+    messageId: string,
+  ): Promise<void> {
+    const conversations = new ConversationsService(this.db);
+    await conversations.requireMembership(conversationId, userId);
+
+    // Played is only meaningful for messages from OTHER participants.
+    // Enforced against the database, not the caller payload.
+    const message = await this.db.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, conversationId: true, senderId: true, kind: true },
+    });
+
+    if (!message) throw Errors.notFound('Message');
+    if (message.conversationId !== conversationId) {
+      throw Errors.badRequest('Message does not belong to this conversation');
+    }
+    if (message.senderId === userId) {
+      throw Errors.badRequest('Cannot mark your own message as played');
+    }
+    if (message.kind !== 'AUDIO') {
+      throw Errors.badRequest('Only voice messages can be marked as played');
+    }
+
+    // Idempotent: only the first play stamps a timestamp.
+    await this.db.messageReceipt.upsert({
+      where: { messageId_userId: { messageId, userId } },
+      create: { messageId, userId, playedAt: new Date() },
+      update: { playedAt: undefined }, // do not overwrite if already played
+    });
+
+    // Re-read to get the authoritative value (may be from an earlier play).
+    const receipt = await this.db.messageReceipt.findUnique({
+      where: { messageId_userId: { messageId, userId } },
+      select: { playedAt: true },
+    });
+
+    if (!receipt?.playedAt) return;
+
+    this.io
+      .to(SOCKET_ROOMS.conversation(conversationId))
+      .emit(MESSAGE_EVENTS.played, {
+        messageId,
+        userId,
+        playedAt: receipt.playedAt.toISOString(),
+      });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conversation list update helpers
+  // ---------------------------------------------------------------------------
 
   /**
    * Summaries are viewer-specific (participants exclude the viewer, unreadCount
@@ -226,9 +434,16 @@ export class MessagesService {
         .to(SOCKET_ROOMS.user(userId))
         .emit(CONVERSATION_EVENTS.updated, { conversation: summary });
     } catch (err) {
-      this.logger.warn({ err, conversationId, userId }, 'Failed to emit conversation update');
+      this.logger.warn(
+        { err, conversationId, userId },
+        'Failed to emit conversation update',
+      );
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // History / sync
+  // ---------------------------------------------------------------------------
 
   async history(
     conversationId: string,
@@ -237,7 +452,7 @@ export class MessagesService {
   ) {
     const conversations = new ConversationsService(this.db);
     await conversations.requireMembership(conversationId, userId);
-  
+
     const rows = await this.db.message.findMany({
       where: {
         conversationId,
@@ -247,7 +462,7 @@ export class MessagesService {
       take: opts.limit + 1,
       include: { attachment: true },
     });
-  
+
     const hasMore = rows.length > opts.limit;
     const page = hasMore ? rows.slice(0, opts.limit) : rows;
     const items = await Promise.all(
@@ -260,7 +475,12 @@ export class MessagesService {
     };
   }
 
-  async sync(conversationId: string, userId: string, afterSequence: string | null, limit: number) {
+  async sync(
+    conversationId: string,
+    userId: string,
+    afterSequence: string | null,
+    limit: number,
+  ) {
     const conversations = new ConversationsService(this.db);
     await conversations.requireMembership(conversationId, userId);
 
@@ -283,7 +503,15 @@ export class MessagesService {
     };
   }
 
-  async markDelivered(conversationId: string, userId: string, messageIds: string[]) {
+  // ---------------------------------------------------------------------------
+  // Receipts
+  // ---------------------------------------------------------------------------
+
+  async markDelivered(
+    conversationId: string,
+    userId: string,
+    messageIds: string[],
+  ) {
     const conversations = new ConversationsService(this.db);
     await conversations.requireMembership(conversationId, userId);
 
@@ -389,11 +617,13 @@ export class MessagesService {
     messageIds: string[],
     status: 'delivered' | 'read',
   ): Promise<void> {
-    this.io.to(SOCKET_ROOMS.conversation(conversationId)).emit(MESSAGE_EVENTS.status, {
-      conversationId,
-      messageIds,
-      status,
-      at: new Date().toISOString(),
-    });
+    this.io
+      .to(SOCKET_ROOMS.conversation(conversationId))
+      .emit(MESSAGE_EVENTS.status, {
+        conversationId,
+        messageIds,
+        status,
+        at: new Date().toISOString(),
+      });
   }
 }

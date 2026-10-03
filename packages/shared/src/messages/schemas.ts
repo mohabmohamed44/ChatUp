@@ -46,6 +46,23 @@ export const messageHistoryQuerySchema = z.object({
     .default(LIMITS.HISTORY_PAGE_SIZE),
 });
 
+export const editMessageSchema = z.object({
+  messageId: z.uuid(),
+  body: z.string().trim().min(1).max(LIMITS.MESSAGE_MAX_LENGTH),
+});
+
+export const deleteMessageSchema = z.object({
+  messageId: z.uuid(),
+});
+
+export const markPlayedSchema = z.object({
+  messageId: z.uuid(),
+  conversationId: z.uuid(),
+});
+
+export type EditMessageInput = z.infer<typeof editMessageSchema>;
+export type DeleteMessageInput = z.infer<typeof deleteMessageSchema>;
+export type MarkPlayedInput = z.infer<typeof markPlayedSchema>;
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 export type ReadReceiptInput = z.infer<typeof readReceiptSchema>;
 export type MessageSyncInput = z.infer<typeof messageSyncSchema>;

@@ -4,4 +4,9 @@ export const MESSAGE_EVENTS = {
   status: 'message:status',
   read: 'message:read',
   sync: 'message:sync',
+  edit: 'message:edit',
+  edited: 'message:edited',
+  delete: 'message:delete',
+  deleted: 'message:deleted',
+  played: 'message:played',
 } as const;

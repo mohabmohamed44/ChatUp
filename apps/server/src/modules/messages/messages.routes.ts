@@ -2,6 +2,9 @@ import { Router } from 'express';
 import {
   MESSAGE_EVENTS,
   SOCKET_ROOMS,
+  deleteMessageSchema,
+  editMessageSchema,
+  markPlayedSchema,
   messageHistoryQuerySchema,
   type Ack,
   type Message,
@@ -110,6 +113,66 @@ export function registerMessageSocketEvents(deps: {
           ack?.({
             ok: false,
             error: { code: 'sync_failed', message: 'Failed to sync messages' },
+          });
+        }
+      },
+    );
+
+    socket.on(
+      MESSAGE_EVENTS.edit,
+      async (payload, ack: (result: Ack<Message>) => void) => {
+        try {
+          const input = editMessageSchema.parse(payload);
+          const message = await service.editMessage(input.messageId, userId, input.body);
+          ack?.({ ok: true, data: message });
+        } catch (err) {
+          logger.warn({ err, userId }, 'message:edit failed');
+          ack?.({
+            ok: false,
+            error: {
+              code: err instanceof Error && 'code' in err ? String(err.code) : 'edit_failed',
+              message: err instanceof Error ? err.message : 'Failed to edit message',
+            },
+          });
+        }
+      },
+    );
+
+    socket.on(
+      MESSAGE_EVENTS.delete,
+      async (payload, ack: (result: Ack<Message>) => void) => {
+        try {
+          const input = deleteMessageSchema.parse(payload);
+          const message = await service.deleteMessage(input.messageId, userId);
+          ack?.({ ok: true, data: message });
+        } catch (err) {
+          logger.warn({ err, userId }, 'message:delete failed');
+          ack?.({
+            ok: false,
+            error: {
+              code: err instanceof Error && 'code' in err ? String(err.code) : 'delete_failed',
+              message: err instanceof Error ? err.message : 'Failed to delete message',
+            },
+          });
+        }
+      },
+    );
+
+    socket.on(
+      MESSAGE_EVENTS.played,
+      async (payload, ack: (result: Ack<null>) => void) => {
+        try {
+          const input = markPlayedSchema.parse(payload);
+          await service.markPlayed(input.conversationId, userId, input.messageId);
+          ack?.({ ok: true, data: null });
+        } catch (err) {
+          logger.warn({ err, userId }, 'message:played failed');
+          ack?.({
+            ok: false,
+            error: {
+              code: 'played_failed',
+              message: err instanceof Error ? err.message : 'Failed to mark as played',
+            },
           });
         }
       },
