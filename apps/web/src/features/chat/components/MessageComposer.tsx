@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { SendHorizontal } from 'lucide-react';
+import { Pencil, SendHorizontal } from 'lucide-react';
 import { LIMITS } from '@chatup/shared';
 import { ImagePicker } from './ImagePicker';
 import type { SendInput } from '../hooks/useSendMessage';
@@ -12,14 +12,30 @@ export function MessageComposer({
   onSend,
   onTyping,
   disabled = false,
+  editMode = null,
 }: {
   conversationId: string;
   onSend: (input: SendInput) => void;
   onTyping?: () => void;
   disabled?: boolean;
+  editMode?: {
+    body: string;
+    onSave: (newBody: string) => Promise<void> | void;
+    onCancel: () => void;
+  } | null;
 }) {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(editMode?.body ?? '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setValue(editMode ? editMode.body : '');
+    if (editMode) textareaRef.current?.focus();
+    // Only re-run when the edited message's body changes (entering edit mode
+    // or switching to another message). Depending on the whole `editMode`
+    // object would reset the draft on every parent re-render, since the
+    // parent passes a fresh inline object each time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode?.body]);
 
   // Auto-resize the textarea as the user types
   useEffect(() => {
@@ -34,6 +50,15 @@ export function MessageComposer({
   function submitText() {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
+
+    if (editMode) {
+      void (async () => {
+        await editMode.onSave(trimmed);
+        setValue('');
+      })();
+      return;
+    }
+
     onSend({ kind: 'text', body: trimmed });
     setValue('');
     textareaRef.current?.focus();
@@ -59,6 +84,21 @@ export function MessageComposer({
       }}
       className="border-t border-slate-200 bg-white p-3"
     >
+      {editMode ? (
+        <div className="mb-2 flex items-center justify-between border-b border-indigo-100 bg-indigo-50 px-4 py-2 text-xs">
+          <span className="flex items-center gap-2 text-indigo-700">
+            <Pencil className="h-3 w-3" aria-hidden="true" />
+            Editing message
+          </span>
+          <button
+            type="button"
+            onClick={editMode.onCancel}
+            className="text-indigo-600 hover:underline"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
       <div className="flex items-end gap-2">
         <ImagePicker
           onUploaded={handleImageUploaded}

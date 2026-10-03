@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, CheckCheck, Clock, AlertCircle } from 'lucide-react';
+import { Check, CheckCheck, Clock, AlertCircle, Mic } from 'lucide-react';
 import type { ClientMessageStatus } from '@chatup/shared';
 import { cn } from '@/shared/lib/utils';
 
@@ -22,7 +22,22 @@ const LABELS: Record<ClientMessageStatus, string> = {
   failed: 'Failed to send',
 };
 
-export function StatusIcon({ status }: { status: ClientMessageStatus }) {
+export function StatusIcon({
+  status,
+  isAudio = false,
+  played = false,
+}: {
+  status: ClientMessageStatus;
+  isAudio?: boolean;
+  played?: boolean;
+}) {
+  if (isAudio && played) {
+    return (
+      <span title="Played" aria-label="Played" className="inline-flex items-center">
+        <Mic className="h-3 w-3 text-sky-300" />
+      </span>
+    );
+  }
   const label = LABELS[status];
   const icon = (() => {
     switch (status) {

@@ -16,6 +16,9 @@ export function MessageList({
   onLoadMore,
   onRetry,
   onRetryLoad,
+  onEdit,
+  onDelete,
+  onMarkPlayed,
 }: {
   messages: ChatMessage[];
   currentUserId: string;
@@ -26,6 +29,9 @@ export function MessageList({
   onLoadMore: () => void;
   onRetry: (clientId: string, body: string) => void;
   onRetryLoad: () => void;
+  onEdit?: (messageId: string, currentBody: string) => void;
+  onDelete?: (messageId: string) => void;
+  onMarkPlayed?: (messageId: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldStickRef = useRef(true);
@@ -117,6 +123,9 @@ export function MessageList({
                 message={message}
                 isOwn={message.senderId === currentUserId}
                 onRetry={onRetry}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onMarkPlayed={onMarkPlayed}
               />
             </li>
           ))}

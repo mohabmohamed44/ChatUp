@@ -21,13 +21,23 @@ function formatMs(ms: number): string {
 export function VoiceMessage({
   attachment,
   isOwn,
+  playedAt,
+  onPlayed,
 }: {
   attachment: Attachment;
   isOwn: boolean;
+  playedAt: string | null;
+  onPlayed?: () => void;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
+  const hasReported = useRef(false);
+
+  // playedAt is sender-visible state; received as a prop to keep the
+  // component signature aligned with MessageBubble. Only the recipient's
+  // first play is reported via onPlayed.
+  void playedAt;
 
   const totalMs = attachment.durationMs ?? 0;
   const remainingMs = Math.max(0, totalMs - currentMs);
@@ -40,6 +50,10 @@ export function VoiceMessage({
       // Pause any other voice message before starting this one (WhatsApp behavior).
       requestExclusivePlay(audio);
       void audio.play().catch(() => {});
+      if (!hasReported.current && !isOwn) {
+        hasReported.current = true;
+        onPlayed?.();
+      }
     } else {
       audio.pause();
     }

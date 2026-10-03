@@ -6,11 +6,17 @@ import {
   type Ack,
   type ClientMessageStatus,
   type Message,
+  type MessagePlayedUpdate,
   type MessageStatusUpdate,
   type Page,
 } from '@chatup/shared';
 import { getSocket } from '@/shared/lib/socket';
 import { fetchMessageHistory } from '../api';
+import {
+  editMessage as editMessageRequest,
+  deleteMessage as deleteMessageRequest,
+  markPlayed as markPlayedRequest,
+} from '../api';
 
 const PAGE_SIZE = 30;
 const SYNC_PAGE_LIMIT = 50;
@@ -168,9 +174,41 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     socket.on(MESSAGE_EVENTS.new, onNew);
     socket.on(MESSAGE_EVENTS.status, onStatus);
 
+    function onEdited(payload: { message: Message }) {
+      const incoming = payload.message;
+      if (incoming.conversationId !== conversationId) return;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === incoming.id ? { ...m, ...incoming } : m)),
+      );
+    }
+
+    function onDeleted(payload: { message: Message }) {
+      const incoming = payload.message;
+      if (incoming.conversationId !== conversationId) return;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === incoming.id ? { ...m, ...incoming } : m)),
+      );
+    }
+
+    socket.on(MESSAGE_EVENTS.edited, onEdited);
+    socket.on(MESSAGE_EVENTS.deleted, onDeleted);
+
+    function onPlayed(payload: MessagePlayedUpdate) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === payload.messageId ? { ...m, playedAt: payload.playedAt } : m,
+        ),
+      );
+    }
+
+    socket.on(MESSAGE_EVENTS.played, onPlayed);
+
     return () => {
       socket.off(MESSAGE_EVENTS.new, onNew);
       socket.off(MESSAGE_EVENTS.status, onStatus);
+      socket.off(MESSAGE_EVENTS.edited, onEdited);
+      socket.off(MESSAGE_EVENTS.deleted, onDeleted);
+      socket.off(MESSAGE_EVENTS.played, onPlayed);
     };
   }, [conversationId, currentUserId, socket]);
 
@@ -293,6 +331,72 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     );
   }, []);
 
+  const editMessageAction = useCallback(
+    async (messageId: string, newBody: string) => {
+      // Optimistic update
+      const previous = messagesRef.current.find((m) => m.id === messageId);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, body: newBody, editedAt: new Date().toISOString() }
+            : m,
+        ),
+      );
+
+      const ack = await editMessageRequest(messageId, newBody);
+      if (!ack.ok) {
+        // Rollback
+        if (previous) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === messageId ? previous : m)),
+          );
+        }
+        setError(ack.error.message);
+      }
+    },
+    [],
+  );
+
+  const deleteMessageAction = useCallback(
+    async (messageId: string) => {
+      const previous = messagesRef.current.find((m) => m.id === messageId);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                body: null,
+                attachment: null,
+                deletedAt: new Date().toISOString(),
+              }
+            : m,
+        ),
+      );
+
+      const ack = await deleteMessageRequest(messageId);
+      if (!ack.ok) {
+        if (previous) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === messageId ? previous : m)),
+          );
+        }
+        setError(ack.error.message);
+      }
+    },
+    [],
+  );
+
+  const markPlayedAction = useCallback(
+    async (messageId: string) => {
+      const ack = await markPlayedRequest(messageId, conversationId);
+      if (!ack.ok) {
+        // silent: played tracking is best-effort
+        console.warn('[played] failed', ack.error);
+      }
+    },
+    [conversationId],
+  );
+
   return {
     messages,
     isLoading,
@@ -305,5 +409,8 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     appendOptimistic,
     replaceOptimistic,
     markFailed,
+    editMessage: editMessageAction,
+    deleteMessage: deleteMessageAction,
+    markPlayed: markPlayedAction,
   };
 }

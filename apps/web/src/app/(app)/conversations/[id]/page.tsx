@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/features/auth';
 import { ChatHeader } from '@/features/chat/components/ChatHeader';
 import { MessageComposer } from '@/features/chat/components/MessageComposer';
@@ -36,7 +36,13 @@ export default function ConversationPage() {
     appendOptimistic,
     replaceOptimistic,
     markFailed,
+    editMessage,
+    deleteMessage,
+    markPlayed,
   } = useConversationMessages(conversationId, currentUserId);
+
+  const [editingMessage, setEditingMessage] = useState<{ id: string; body: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const sendMessage = useSendMessage(
     conversationId,
@@ -112,6 +118,9 @@ export default function ConversationPage() {
         onLoadMore={() => void loadMore()}
         onRetry={(clientId, body) => sendMessage({ kind: 'text', body }, clientId)}
         onRetryLoad={reload}
+        onEdit={(messageId, currentBody) => setEditingMessage({ id: messageId, body: currentBody })}
+        onDelete={(messageId) => setPendingDelete(messageId)}
+        onMarkPlayed={(messageId) => void markPlayed(messageId)}
       />
 
       <MessageComposer
@@ -119,7 +128,44 @@ export default function ConversationPage() {
         onSend={(body) => sendMessage(body)}
         onTyping={notifyTyping}
         disabled={!isConnected}
+        editMode={
+          editingMessage
+            ? {
+                body: editingMessage.body,
+                onSave: async (newBody) => {
+                  await editMessage(editingMessage.id, newBody);
+                  setEditingMessage(null);
+                },
+                onCancel: () => setEditingMessage(null),
+              }
+            : null
+        }
       />
+
+      {pendingDelete ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-xl">
+            <p className="mb-3 text-sm">Delete this message?</p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setPendingDelete(null)}
+                className="rounded border px-3 py-1.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await deleteMessage(pendingDelete);
+                  setPendingDelete(null);
+                }}
+                className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

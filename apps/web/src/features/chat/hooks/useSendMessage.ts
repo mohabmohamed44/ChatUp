@@ -100,6 +100,9 @@ export function useSendMessage(
         status: 'pending',
         clientId,
         createdAt: new Date().toISOString(),
+        editedAt: null,
+        deletedAt: null,
+        playedAt: null,
       };
 
       onOptimistic(optimistic);
