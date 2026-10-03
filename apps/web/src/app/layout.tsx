@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/shared/providers/AuthProvider';
 import { LocaleProvider } from '@/shared/providers/LocaleProvider';
+import { ToastProvider } from '@/shared/providers/ToastProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,7 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <body className={`${inter.className} min-h-dvh antialiased`} suppressHydrationWarning>
         <LocaleProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <ToastProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </ToastProvider>
         </LocaleProvider>
       </body>
     </html>
