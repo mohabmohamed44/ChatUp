@@ -6,9 +6,11 @@ import { formatBubbleTimestamp, formatFullTimestamp } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils';
 import { useLocale } from '@/shared/providers/LocaleProvider';
 import { ImageMessage } from './ImageMessage';
+import { MessageBody } from './MessageBody';
 import { VoiceMessage } from './VoiceMessage';
 import type { ChatMessage } from '../hooks/useConversationMessages';
 import { StatusIcon } from './StatusIcon';
+import { useToast } from '@/shared/providers/ToastProvider';
 
 export function MessageBubble({
   message,
@@ -25,7 +27,7 @@ export function MessageBubble({
   const body = message.body;
 
   const [copied, setCopied] = useState(false);
-
+  const toast = useToast();
   const canRetry =
     isOwn &&
     message.status === 'failed' &&
@@ -42,25 +44,11 @@ export function MessageBubble({
     try {
       await navigator.clipboard.writeText(body);
       setCopied(true);
+      toast.showToast('Copied to clipboard', { variant: 'success', duration: 2000 });
       window.setTimeout(() => setCopied(false), 1500);
     } catch (err) {
-      // Fallback for older browsers or insecure contexts
-      const textarea = document.createElement('textarea');
-      textarea.value = body;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-
-      try {
-        document.execCommand('copy');
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-      } catch {
-        console.warn('[copy] failed', err);
-      } finally {
-        document.body.removeChild(textarea);
-      }
+      toast.showToast('Failed to copy', { variant: 'error', duration: 2500 });
+      console.warn('[copy] failed', err);
     }
   }
 
@@ -85,7 +73,7 @@ export function MessageBubble({
           ) : null}
 
           {message.kind === 'text' && body ? (
-            <p className="whitespace-pre-wrap break-words">{body}</p>
+            <MessageBody text={body} isOwn={isOwn} />
           ) : null}
 
           <div
