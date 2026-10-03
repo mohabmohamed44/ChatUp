@@ -743,3 +743,41 @@ was in the DB state.
 - Message editing (schema + socket event + inline edit UI)
 - Local cache for messages and conversations
 - 100-user load test (after Phase 6 deployment)
+
+
+## 2026-10-04 — Message edit, delete, copy toast, info modal
+
+### Message editing
+- `Message.editedAt` column + migration
+- `editMessage()`: sender-only, text-only, 15-minute window
+- Pencil icon in the bubble; composer enters edit mode
+- `(edited)` label next to the timestamp
+- Optimistic update with rollback; real-time via `message:edited`
+
+### Message deletion
+- `Message.deletedAt` column + migration
+- `deleteMessage()`: sender-only, soft delete, idempotent
+- Trash icon, confirmation dialog, placeholder for deleted messages
+- Conversation list preview updates on delete
+
+### Copy toast
+- `ToastProvider` with three variants and a shrinking progress bar
+- Wired to the copy message button
+- No dependencies; CSS-animated progress
+
+### Message info modal
+- `MessageInfoModal` shows sent, delivered, read, and played timestamps
+- Info button in the bubble opens it
+- Backend exposes `deliveredAt`, `readAt`, `playedAt` on `Message`
+- `useConversationMessages` merges them into state on socket events
+
+### Files
+- Backend: schema + 3 migrations, messages.service, messages.routes
+- Shared: types, schemas, events, realtime
+- Frontend: ToastProvider, MessageInfoModal, MessageBubble,
+  MessageComposer, useConversationMessages, chat page
+
+### Verified
+- Typecheck passes on all workspaces
+- Two-browser test: edit, delete, copy, info modal all work
+- RTL: all features render correctly in Arabic
