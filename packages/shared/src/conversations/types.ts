@@ -8,4 +8,5 @@ export interface ConversationSummary {
   lastMessage: MessagePreview | null;
   unreadCount: number;
   lastActivityAt: ISODateString;
+  lastReadMessageId?: string | null;
 }

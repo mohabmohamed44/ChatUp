@@ -17,6 +17,7 @@ type ConversationRow = {
     createdAt: Date;
   } | null;
   unreadCount?: number;
+  lastReadMessageId?: string | null;
 };
 
 function previewText(row: ConversationRow): string {
@@ -46,6 +47,7 @@ function toSummary(row: ConversationRow, viewerId: string): ConversationSummary 
     lastMessage,
     unreadCount: row.unreadCount ?? 0,
     lastActivityAt: row.lastActivityAt.toISOString(),
+    lastReadMessageId: row.lastReadMessageId ?? null,
   };
 }
 
@@ -90,7 +92,7 @@ export class ConversationsService {
       repaired.map(async (row) => {
         const membership = await this.db.conversationParticipant.findUnique({
           where: { conversationId_userId: { conversationId: row.id, userId } },
-          select: { lastReadMessage: { select: { sequence: true } } },
+          select: { lastReadMessage: { select: { sequence: true } }, lastReadMessageId: true },
         });
         const lastReadSequence = membership?.lastReadMessage?.sequence ?? null;
         const unreadCount = await this.db.message.count({
@@ -101,7 +103,7 @@ export class ConversationsService {
             ...(lastReadSequence !== null ? { sequence: { gt: lastReadSequence } } : {}),
           },
         });
-        return { ...row, unreadCount };
+        return { ...row, unreadCount, lastReadMessageId: membership?.lastReadMessageId ?? null };
       }),
     );
   }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/features/auth';
 import { ChatHeader } from '@/features/chat/components/ChatHeader';
 import { MessageComposer } from '@/features/chat/components/MessageComposer';
@@ -24,6 +24,21 @@ export default function ConversationPage() {
   const currentUserId = user?.id ?? '';
   const conversation = conversations.find((item) => item.id === conversationId);
   const participant = conversation?.participants[0];
+
+  const initialUnreadRef = useRef<{ id: string; count: number } | null>(null);
+
+  // Capture once per conversation when it first loads (reset on switch,
+  // since the page component is reused across conversation ids)
+  if (
+    conversation &&
+    (initialUnreadRef.current === null ||
+      initialUnreadRef.current.id !== conversationId)
+  ) {
+    initialUnreadRef.current = {
+      id: conversationId,
+      count: conversation.unreadCount,
+    };
+  }
 
   const {
     messages,
@@ -108,7 +123,10 @@ export default function ConversationPage() {
         </p>
       ) : null}
 
+      {/* Remount per conversation so scroll position, jump-button
+          visibility, and divider state never leak from the previous chat. */}
       <MessageList
+        key={conversationId}
         messages={messages}
         currentUserId={currentUserId}
         hasMore={hasMore}
@@ -121,6 +139,7 @@ export default function ConversationPage() {
         onEdit={(messageId, currentBody) => setEditingMessage({ id: messageId, body: currentBody })}
         onDelete={(messageId) => setPendingDelete(messageId)}
         onMarkPlayed={(messageId) => void markPlayed(messageId)}
+        initialUnreadCount={initialUnreadRef.current?.count ?? 0}
       />
 
       <MessageComposer

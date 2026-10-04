@@ -107,10 +107,20 @@ export function useConversationMessages(conversationId: string, currentUserId: s
 
   const messagesRef = useRef<ChatMessage[]>([]);
   const lastReadMessageIdRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
+  const conversationIdRef = useRef(conversationId);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+    // A new conversation gets a fresh load cycle; never let an in-flight
+    // older-history fetch from the previous chat touch this one.
+    loadingMoreRef.current = false;
+    setIsLoadingMore(false);
+  }, [conversationId]);
 
   // Initial load. Resets state so switching conversations never flashes stale messages.
   useEffect(() => {
@@ -304,21 +314,33 @@ export function useConversationMessages(conversationId: string, currentUserId: s
   }, [markRead]);
 
   const loadMore = useCallback(async () => {
-    if (!nextCursor || isLoading || isLoadingMore) return;
+    // Ref guard (not just state): rapid scroll events + button clicks can
+    // otherwise fire duplicate fetches for the same cursor before the
+    // re-render flips `isLoadingMore`.
+    if (!nextCursor || isLoading || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
     setIsLoadingMore(true);
+    const startedFor = conversationId;
+    const cursor = nextCursor;
     try {
-      const page = await fetchMessageHistory(conversationId, {
-        before: nextCursor,
+      const page = await fetchMessageHistory(startedFor, {
+        before: cursor,
         limit: PAGE_SIZE,
       });
+      // The user may have switched conversations while the fetch was in
+      // flight — drop the result instead of merging it into the wrong chat.
+      if (conversationIdRef.current !== startedFor) return;
       setMessages((prev) => mergeMessages(prev, page.items));
       setNextCursor(page.nextCursor);
+      setError(null);
     } catch (err: unknown) {
+      if (conversationIdRef.current !== startedFor) return;
       setError(err instanceof Error ? err.message : 'Failed to load earlier messages');
     } finally {
+      loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
-  }, [conversationId, nextCursor, isLoading, isLoadingMore]);
+  }, [conversationId, nextCursor, isLoading]);
 
   const reload = useCallback(() => {
     setReloadToken((token) => token + 1);
