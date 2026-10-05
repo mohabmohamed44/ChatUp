@@ -109,9 +109,17 @@ export function NewChatSearch({ onDone }: { onDone: () => void }) {
                 'disabled:cursor-not-allowed disabled:opacity-60',
               )}
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
-                {initialsOf(person.displayName)}
-              </span>
+              {person.avatarUrl ? (
+                <img
+                  src={person.avatarUrl}
+                  alt=""
+                  className="h-9 w-9 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
+                  {initialsOf(person.displayName)}
+                </span>
+              )}
               <span className="min-w-0 flex-1 truncate text-slate-800">
                 {person.displayName}
               </span>

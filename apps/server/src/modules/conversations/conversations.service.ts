@@ -1,13 +1,15 @@
 import { LIMITS, PREVIEW_LABELS, type ConversationSummary, type MessagePreview } from '@chatup/shared';
+import type { AppConfig } from '../../platform/config';
 import type { Db } from '../../platform/db';
 import { Errors } from '../../platform/errors';
+import type { StorageService } from '../../platform/storage';
 
 type ConversationRow = {
   id: string;
   lastActivityAt: Date;
   participants: {
     userId: string;
-    user: { id: string; displayName: string };
+    user: { id: string; displayName: string; avatarMediaId: string | null };
   }[];
   lastMessage: {
     id: string;
@@ -29,7 +31,12 @@ function previewText(row: ConversationRow): string {
   return message.body ?? '';
 }
 
-function toSummary(row: ConversationRow, viewerId: string): ConversationSummary {
+async function toSummary(
+  row: ConversationRow,
+  viewerId: string,
+  storage: StorageService,
+  ttlSeconds: number,
+): Promise<ConversationSummary> {
   const lastMessage = row.lastMessage
     ? ({
         messageId: row.lastMessage.id,
@@ -39,11 +46,20 @@ function toSummary(row: ConversationRow, viewerId: string): ConversationSummary 
         createdAt: row.lastMessage.createdAt.toISOString(),
       }) satisfies MessagePreview
     : null;
+  const participants = await Promise.all(
+    row.participants
+      .filter((p) => p.userId !== viewerId)
+      .map(async (p) => ({
+        id: p.user.id,
+        displayName: p.user.displayName,
+        avatarUrl: p.user.avatarMediaId
+          ? await storage.signedGetUrl(`attachments/${p.user.avatarMediaId}`, ttlSeconds)
+          : null,
+      })),
+  );
   return {
     id: row.id,
-    participants: row.participants
-      .filter((p) => p.userId !== viewerId)
-      .map((p) => ({ id: p.user.id, displayName: p.user.displayName, avatarUrl: null })),
+    participants,
     lastMessage,
     unreadCount: row.unreadCount ?? 0,
     lastActivityAt: row.lastActivityAt.toISOString(),
@@ -51,8 +67,21 @@ function toSummary(row: ConversationRow, viewerId: string): ConversationSummary 
   };
 }
 
+const PARTICIPANT_SELECT = {
+  userId: true,
+  user: { select: { id: true, displayName: true, avatarMediaId: true } },
+} as const;
+
 export class ConversationsService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly storage: StorageService,
+    private readonly config: Pick<AppConfig, 'MEDIA_URL_TTL_SECONDS'>,
+  ) {}
+
+  private ttlSeconds(): number {
+    return this.config.MEDIA_URL_TTL_SECONDS;
+  }
 
   private async loadRowsForUser(userId: string, conversationId?: string) {
     const rows = await this.db.conversation.findMany({
@@ -63,7 +92,7 @@ export class ConversationsService {
       orderBy: { lastActivityAt: 'desc' },
       take: conversationId ? 1 : 100,
       include: {
-        participants: { select: { userId: true, user: { select: { id: true, displayName: true } } } },
+        participants: { select: PARTICIPANT_SELECT },
         lastMessage: true,
       },
     });
@@ -110,7 +139,7 @@ export class ConversationsService {
 
   async listForUser(userId: string): Promise<ConversationSummary[]> {
     const rows = await this.loadRowsForUser(userId);
-    return rows.map((row) => toSummary(row, userId));
+    return Promise.all(rows.map((row) => toSummary(row, userId, this.storage, this.ttlSeconds())));
   }
 
   /**
@@ -120,7 +149,7 @@ export class ConversationsService {
   async summaryForUser(conversationId: string, userId: string): Promise<ConversationSummary | null> {
     const rows = await this.loadRowsForUser(userId, conversationId);
     const row = rows[0];
-    return row ? toSummary(row, userId) : null;
+    return row ? toSummary(row, userId, this.storage, this.ttlSeconds()) : null;
   }
 
   async startDirect(userId: string, otherUserId: string): Promise<ConversationSummary> {
@@ -135,12 +164,12 @@ export class ConversationsService {
     const existing = await this.db.conversation.findUnique({
       where: { directKey },
       include: {
-        participants: { select: { userId: true, user: { select: { id: true, displayName: true } } } },
+        participants: { select: PARTICIPANT_SELECT },
         lastMessage: true,
       },
     });
     if (existing) {
-      return toSummary({ ...existing, unreadCount: 0 }, userId);
+      return toSummary({ ...existing, unreadCount: 0 }, userId, this.storage, this.ttlSeconds());
     }
     const created = await this.db.conversation.create({
       data: {
@@ -153,11 +182,11 @@ export class ConversationsService {
         },
       },
       include: {
-        participants: { select: { userId: true, user: { select: { id: true, displayName: true } } } },
+        participants: { select: PARTICIPANT_SELECT },
         lastMessage: true,
       },
     });
-    return toSummary({ ...created, unreadCount: 0 }, userId);
+    return toSummary({ ...created, unreadCount: 0 }, userId, this.storage, this.ttlSeconds());
   }
 
   async requireMembership(conversationId: string, userId: string): Promise<void> {

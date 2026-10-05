@@ -38,14 +38,22 @@ export function ConversationItem({
         )}
       >
         <span className="relative shrink-0">
-          <span
-            className={cn(
-              'flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold',
-              isActive ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700',
-            )}
-          >
-            {initialsOf(name)}
-          </span>
+          {other?.avatarUrl ? (
+            <img
+              src={other.avatarUrl}
+              alt=""
+              className="h-11 w-11 rounded-full object-cover"
+            />
+          ) : (
+            <span
+              className={cn(
+                'flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold',
+                isActive ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700',
+              )}
+            >
+              {initialsOf(name)}
+            </span>
+          )}
           <span
             aria-hidden="true"
             className={cn(

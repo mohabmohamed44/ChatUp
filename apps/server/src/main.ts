@@ -21,8 +21,8 @@ async function main(): Promise<void> {
     logger.warn({ err }, 'Object storage unavailable at boot; media uploads will fail');
   }
 
-  const auth = createAuthModule({ db, config, logger });
-  const usersRouter = createUsersModule({ db, requireAuth: auth.requireAuth });
+  const auth = createAuthModule({ db, config, logger, storage });
+  const usersRouter = createUsersModule({ db, config, storage, requireAuth: auth.requireAuth });
 
   const app = createHttpApp({
     config,
@@ -37,8 +37,10 @@ async function main(): Promise<void> {
 
   const conversationsRouter = createConversationsModule({
     db,
+    config,
     logger,
     io,
+    storage,
     requireAuth: auth.requireAuth,
   });
   const messagesRouter = createMessagesModule({

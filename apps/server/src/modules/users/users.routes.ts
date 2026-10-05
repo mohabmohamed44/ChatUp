@@ -1,8 +1,10 @@
 import { Router, type RequestHandler } from 'express';
 import { LIMITS, type PublicUser } from '@chatup/shared';
 import { z } from 'zod';
+import type { AppConfig } from '../../platform/config';
 import type { Db } from '../../platform/db';
 import { asyncHandler, Errors } from '../../platform/errors';
+import type { StorageService } from '../../platform/storage';
 
 const searchQuerySchema = z
   .string()
@@ -11,7 +13,11 @@ const searchQuerySchema = z
   .max(100);
 
 export class UsersService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly storage: StorageService,
+    private readonly config: AppConfig,
+  ) {}
 
   async search(query: string, excludeUserId: string): Promise<PublicUser[]> {
     const users = await this.db.user.findMany({
@@ -21,16 +27,32 @@ export class UsersService {
           { displayName: { contains: query, mode: 'insensitive' } },
         ],
       },
-      select: { id: true, displayName: true },
+      select: { id: true, displayName: true, avatarMediaId: true },
       orderBy: { displayName: 'asc' },
       take: LIMITS.SEARCH_RESULTS_MAX,
     });
-    return users.map((u: { id: string; displayName: string }) => ({ id: u.id, displayName: u.displayName, avatarUrl: null }));
+    return Promise.all(
+      users.map(async (u): Promise<PublicUser> => ({
+        id: u.id,
+        displayName: u.displayName,
+        avatarUrl: u.avatarMediaId
+          ? await this.storage.signedGetUrl(
+              `attachments/${u.avatarMediaId}`,
+              this.config.MEDIA_URL_TTL_SECONDS,
+            )
+          : null,
+      })),
+    );
   }
 }
 
-export function createUsersModule(deps: { db: Db; requireAuth: RequestHandler }): Router {
-  const service = new UsersService(deps.db);
+export function createUsersModule(deps: {
+  db: Db;
+  config: AppConfig;
+  storage: StorageService;
+  requireAuth: RequestHandler;
+}): Router {
+  const service = new UsersService(deps.db, deps.storage, deps.config);
   const router = Router();
 
   router.get(
