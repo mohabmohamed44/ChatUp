@@ -781,3 +781,165 @@ was in the DB state.
 - Typecheck passes on all workspaces
 - Two-browser test: edit, delete, copy, info modal all work
 - RTL: all features render correctly in Arabic
+
+
+## 2026-10-5 - Jump to latest, Unread-Message Divider
+
+### Unread divider
+
+**Added**
+- Divider in `MessageList.tsx` that appears above the first unread
+  message
+- `initialUnreadCount` captured once on mount via a ref in `page.tsx`
+  so it does not flash to 0 after `markRead` fires
+- Divider index computed with `useMemo` and clamped to 0 when unreadCount
+  exceeds the currently loaded messages
+
+**Verified**
+- Two-browser test: divider appears on the recipient side
+- Divider disappears on next visit once messages are read
+- No divider when unreadCount is 0
+- Deleted message in the unread block still shows the divider
+
+
+
+### Jump to latest
+
+**Added**
+- Floating "Latest" button in `MessageList.tsx`
+- Appears when scrolled up more than 300px
+- Smooth-scrolls to the newest message
+- Uses `end-4` so it flips correctly in RTL
+- `ArrowDown` icon from lucide-react
+
+**Verified**
+- Button appears on scroll up
+- Click scrolls smoothly
+- Button hides at the bottom
+- RTL: button sits on the left edge in Arabic
+- Mobile: renders correctly
+
+
+## 2026-10-06 — Profile page with avatar upload
+
+### Backend
+
+**Schema**
+- No schema changes — `User.avatarMediaId` already existed
+
+**AuthService**
+- Constructor now takes `StorageService` alongside `db` and `config`
+- `toAuthUser()` is async and generates a signed URL for the avatar via
+  `storage.signedGetUrl('attachments/<avatarMediaId>', ttl)`
+- `updateProfile()` now handles `avatarMediaId`:
+  - Validates the attachment exists, is owned by the user, and is
+    `COMPLETED`
+  - Updates both `displayName` and `avatarMediaId` when provided
+  - Returns `AuthUser` with a fresh signed avatar URL
+
+**Auth routes**
+- `PATCH /auth/profile` already existed; it now returns a user with a
+  signed `avatarUrl`
+- `GET /auth/me` returns the same shape
+
+**Config**
+- Confirmed `MEDIA_URL_TTL_SECONDS` in `AppConfig`
+
+### Frontend
+
+**`apps/web/src/features/auth/api.ts`**
+- Added `updateProfile(input: UpdateProfileInput): Promise<{ user }>`
+
+**`apps/web/src/shared/providers/AuthProvider.tsx`**
+- Exposed `setUser` from the context so other components can update the
+  cached user after a profile change
+
+**`apps/web/src/features/profile/api.ts`** (new)
+- Re-exports `me` as `fetchProfile` to keep profile code self-contained
+
+**`apps/web/src/app/(app)/settings/profile/page.tsx`** (new)
+- New route `/settings/profile`
+- Fetches the latest profile from `/auth/me` on mount
+- Uses the cached user from `AuthProvider` for instant render
+- Shows: avatar (or initials), display name, email, member since, user ID
+- Logout button
+- **Avatar edit**: a pencil badge sits on the bottom corner of the avatar
+  - Opens a file picker
+  - Uploads via the existing `/media/image` endpoint
+  - Persists via `PATCH /auth/profile` with `avatarMediaId`
+  - Local preview during upload; reverts on failure
+  - Toast on success or error
+  - Syncs `AuthProvider` so the sidebar updates instantly
+- Full RTL support — back arrow flips, layout mirrors
+
+**`apps/web/src/features/conversations/components/ConversationList.tsx`**
+- Sidebar footer is now a `Link` to `/settings/profile`
+- Shows the user's avatar if set, initials otherwise
+
+**`apps/web/src/features/chat/components/ChatHeader.tsx`**
+- Renders the other participant's avatar image when available, initials
+  otherwise
+- Presence dot sits on top of the avatar
+- RTL-correct positioning
+
+**`apps/web/src/features/conversations/components/ConversationItem.tsx`**
+- Same avatar-or-initials fallback in the conversation list rows
+
+### Fixed during this work
+
+- `AuthService` was not receiving `StorageService` — fixed by updating
+  the constructor and the call site in `auth.routes.ts`
+- `toAuthUser` was synchronous and returned `avatarUrl: null` — now async
+  with signed URL generation
+- `updateProfile` was not handling `avatarMediaId` — added validation
+  and the update
+- `config.storage.signedUrlTtlSeconds` did not exist — replaced with
+  `config.MEDIA_URL_TTL_SECONDS`
+
+### Verified
+
+- Upload a JPEG → avatar appears immediately in the profile page, in the
+  chat header, and in the sidebar footer
+- Refresh → avatar persists
+- Non-image file → error toast; avatar reverts
+- Change avatar to a new image → old signed URL is replaced everywhere
+- RTL: pencil badge and presence dot align correctly
+- Logout → redirected to `/login`; session cleared
+- `npx tsc --noEmit` passes on all three workspaces
+- `POST /api/media/image` returns 201 with an attachment ID
+- `GET /api/auth/me` returns 200 with a signed `avatarUrl`
+
+### Notes
+
+- Avatars are stored in the GCS emulator (local) or GCS (production),
+  not in PostgreSQL. Postgres holds only `avatarMediaId` as a foreign
+  key to `MediaAttachment`.
+- Signed URLs have a 900-second TTL. When an avatar URL expires, the
+  next `/auth/me` or conversation fetch regenerates it.
+- `UpdateProfileInput` in `packages/shared` supports both `displayName`
+  and `avatarMediaId` as optional fields.
+
+### Files touched (Oct 6)
+
+**Backend**
+- `apps/server/src/modules/auth/auth.service.ts`
+- `apps/server/src/modules/auth/auth.routes.ts`
+- `apps/server/src/main.ts`
+- `packages/shared/src/auth/schemas.ts` (confirmed `avatarMediaId`)
+
+**Frontend**
+- `apps/web/src/features/auth/api.ts`
+- `apps/web/src/shared/providers/AuthProvider.tsx`
+- `apps/web/src/features/profile/api.ts` (new)
+- `apps/web/src/app/(app)/settings/profile/page.tsx` (new)
+- `apps/web/src/features/conversations/components/ConversationList.tsx`
+- `apps/web/src/features/conversations/components/ConversationItem.tsx`
+- `apps/web/src/features/chat/components/ChatHeader.tsx`
+
+### What is next
+
+- Local cache (IndexedDB) for messages and conversations
+- Message queues (BullMQ) for background jobs
+- PWA + FCM for push notifications
+- Dockerfile + CI/CD + GCP deployment
+- 100-user load test (after deployment)
