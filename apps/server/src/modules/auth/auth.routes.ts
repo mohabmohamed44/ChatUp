@@ -17,6 +17,7 @@ import {
   setSessionCookies,
   validateSession,
 } from './auth.session';
+import type { StorageService } from '../../platform/storage';
 
 export interface AuthModule {
   router: Router;
@@ -28,9 +29,10 @@ export function createAuthModule(deps: {
   db: Db;
   config: AppConfig;
   logger: Logger;
+  storage: StorageService;
 }): AuthModule {
-  const { db, config } = deps;
-  const service = new AuthService(db, config);
+  const { db, config, storage } = deps;
+  const service = new AuthService(db, config, storage);
   const requireAuth = createRequireAuth(db);
 
   const authLimiter = rateLimit({
@@ -83,7 +85,7 @@ export function createAuthModule(deps: {
     asyncHandler(async (req, res) => {
       const session = await validateSession(db, req.cookies[LIMITS.SESSION_COOKIE_NAME]);
       if (!session) throw Errors.unauthorized();
-      res.json({ user: toAuthUser(session.user) });
+      res.json({ user: await toAuthUser(session.user, storage, config.MEDIA_URL_TTL_SECONDS) });
     }),
   );
 

@@ -182,7 +182,7 @@ export class MessagesService {
   // ---------------------------------------------------------------------------
 
   async send(input: SendMessageInput, senderId: string): Promise<Message> {
-    const conversations = new ConversationsService(this.db);
+    const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(input.conversationId, senderId);
 
     // The idempotency lookup, attachment validation, insert and the
@@ -394,7 +394,7 @@ export class MessagesService {
     userId: string,
     messageId: string,
   ): Promise<void> {
-    const conversations = new ConversationsService(this.db);
+    const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(conversationId, userId);
 
     // Played is only meaningful for messages from OTHER participants.
@@ -448,7 +448,7 @@ export class MessagesService {
    * is theirs), so every participant receives their own computed summary.
    */
   private async emitConversationUpdate(conversationId: string): Promise<void> {
-    const svc = new ConversationsService(this.db);
+    const svc = new ConversationsService(this.db, this.storage, this.config);
     const participantIds = await svc.participantIds(conversationId);
     await Promise.all(
       participantIds.map((participantId) =>
@@ -462,7 +462,7 @@ export class MessagesService {
     userId: string,
   ): Promise<void> {
     try {
-      const svc = new ConversationsService(this.db);
+      const svc = new ConversationsService(this.db, this.storage, this.config);
       const summary = await svc.summaryForUser(conversationId, userId);
       if (!summary) return;
       this.io
@@ -485,7 +485,7 @@ export class MessagesService {
     userId: string,
     opts: { before?: string; limit: number },
   ) {
-    const conversations = new ConversationsService(this.db);
+    const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(conversationId, userId);
 
     const rows = await this.db.message.findMany({
@@ -516,7 +516,7 @@ export class MessagesService {
     afterSequence: string | null,
     limit: number,
   ) {
-    const conversations = new ConversationsService(this.db);
+    const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(conversationId, userId);
 
     const rows = await this.db.message.findMany({
@@ -547,7 +547,7 @@ export class MessagesService {
     userId: string,
     messageIds: string[],
   ) {
-    const conversations = new ConversationsService(this.db);
+    const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(conversationId, userId);
 
     // Receipts are only meaningful for messages from OTHER participants of this
@@ -585,7 +585,7 @@ export class MessagesService {
   }
 
   async markRead(conversationId: string, userId: string, upToMessageId?: string) {
-    const conversations = new ConversationsService(this.db);
+    const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(conversationId, userId);
 
     // Resolving the target, stamping every unread receipt and advancing the

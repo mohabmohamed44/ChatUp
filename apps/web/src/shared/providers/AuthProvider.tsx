@@ -15,6 +15,8 @@ import {
   logout as logoutRequest,
   me as fetchMe,
   register as registerRequest,
+  type UpdateAvatarInput,
+  updateAvatar as updateAvatarRequest,
 } from '../../features/auth/api';
 import { getSocket } from '../lib/socket';
 
@@ -24,6 +26,7 @@ interface AuthContextValue {
   login: (input: LoginInput) => Promise<AuthUser>;
   register: (input: RegisterInput) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  updateAvatar: (input: UpdateAvatarInput) => Promise<AuthUser>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -104,9 +107,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateAvatar = useCallback(async (input: UpdateAvatarInput) => {
+    const response = await updateAvatarRequest(input);
+    setUser(response.user);
+    return response.user;
+  }, []);
+
   const value = useMemo(
-    () => ({ user, isLoading, login, register, logout }),
-    [user, isLoading, login, register, logout],
+    () => ({ user, isLoading, login, register, logout, updateAvatar }),
+    [user, isLoading, login, register, logout, updateAvatar],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

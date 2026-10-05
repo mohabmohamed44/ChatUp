@@ -27,7 +27,9 @@ export const updateProfileSchema = z.object({
     .string()
     .trim()
     .min(LIMITS.DISPLAY_NAME_MIN)
-    .max(LIMITS.DISPLAY_NAME_MAX),
+    .max(LIMITS.DISPLAY_NAME_MAX)
+    .optional(),
+    avatarMediaId: z.string().nullable().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

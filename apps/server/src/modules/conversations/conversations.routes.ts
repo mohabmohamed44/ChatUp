@@ -5,6 +5,8 @@ import {
   startConversationSchema,
 } from '@chatup/shared';
 import type { Db } from '../../platform/db';
+import type { AppConfig } from '../../platform/config';
+import type { StorageService } from '../../platform/storage';
 import { asyncHandler, Errors } from '../../platform/errors';
 import type { Logger } from '../../platform/logger';
 import type { ChatIo } from '../../realtime/io';
@@ -12,12 +14,14 @@ import { ConversationsService } from './conversations.service';
 
 export function createConversationsModule(deps: {
   db: Db;
+  config: AppConfig;
   logger: Logger;
   io: ChatIo;
+  storage: StorageService;
   requireAuth: import('express').RequestHandler;
 }): Router {
-  const { db, io } = deps;
-  const service = new ConversationsService(db);
+  const { db, config, io, storage } = deps;
+  const service = new ConversationsService(db, storage, config);
   const router = Router();
 
   router.get(

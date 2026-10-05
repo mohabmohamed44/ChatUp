@@ -1,6 +1,10 @@
 import type { AuthUser, LoginInput, RegisterInput } from '@chatup/shared';
 import { ApiError, apiFetch } from '../../shared/lib/api';
 
+export type UpdateAvatarInput = {
+  avatarMediaId: string | null;
+}
+
 export interface AuthResponse {
   user: AuthUser;
 }
@@ -27,4 +31,8 @@ export async function me(): Promise<{ user: AuthUser | null }> {
 
 export function logout(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>('/auth/logout', { method: 'POST' });
+}
+
+export function updateAvatar(input: UpdateAvatarInput): Promise<{ user: AuthUser }> {
+  return apiFetch<{ user: AuthUser }>('/auth/profile', { method: 'PATCH', body: input });
 }

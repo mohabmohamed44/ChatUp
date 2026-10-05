@@ -4,21 +4,26 @@ import type { Db } from '../../platform/db';
 import { Errors } from '../../platform/errors';
 import { hashPassword, verifyPassword } from './auth.password';
 import { createSession, revokeSession, type SessionBundle } from './auth.session';
+import type { StorageService } from '../../platform/storage';
+import type { User } from '../../generated/prisma/client';
 
-type UserRecord = {
-  id: string;
-  email: string;
-  displayName: string;
-  avatarMediaId: string | null;
-  createdAt: Date;
-};
-
-export function toAuthUser(user: UserRecord): AuthUser {
+export async function toAuthUser(
+  user: User,
+  storage: StorageService,
+  ttlSeconds: number,
+): Promise<AuthUser> {
+  let avatarUrl: string | null = null;
+  if (user.avatarMediaId) {
+    avatarUrl = await storage.signedGetUrl(
+      `attachments/${user.avatarMediaId}`,
+      ttlSeconds,
+    );
+  }
   return {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
-    avatarUrl: null,
+    avatarUrl,
     createdAt: user.createdAt.toISOString(),
   };
 }
@@ -27,39 +32,89 @@ export class AuthService {
   constructor(
     private readonly db: Db,
     private readonly config: AppConfig,
+    private readonly storage: StorageService,
   ) {}
 
-  async register(input: RegisterInput): Promise<{ user: AuthUser; session: SessionBundle }> {
-    const existing = await this.db.user.findUnique({ where: { email: input.email } });
+  async register(
+    input: RegisterInput,
+  ): Promise<{ user: AuthUser; session: SessionBundle }> {
+    const existing = await this.db.user.findUnique({
+      where: { email: input.email },
+    });
     if (existing) {
       throw Errors.conflict('An account with this email already exists');
     }
+
     const passwordHash = await hashPassword(input.password);
+
     const { user, session } = await this.db.$transaction(async (tx) => {
       const created = await tx.user.create({
-        data: { email: input.email, passwordHash, displayName: input.displayName },
+        data: {
+          email: input.email,
+          passwordHash,
+          displayName: input.displayName,
+        },
       });
       const createdSession = await createSession(tx, this.config, created.id);
       return { user: created, session: createdSession };
     });
-    return { user: toAuthUser(user), session };
+
+    return {
+      user: await toAuthUser(user, this.storage, this.config.MEDIA_URL_TTL_SECONDS),
+      session,
+    };
   }
 
-  async login(input: LoginInput): Promise<{ user: AuthUser; session: SessionBundle }> {
-    const user = await this.db.user.findUnique({ where: { email: input.email } });
+  async login(
+    input: LoginInput,
+  ): Promise<{ user: AuthUser; session: SessionBundle }> {
+    const user = await this.db.user.findUnique({
+      where: { email: input.email },
+    });
     if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
       throw Errors.unauthorized('Invalid email or password');
     }
+
     const session = await createSession(this.db, this.config, user.id);
-    return { user: toAuthUser(user), session };
+
+    return {
+      user: await toAuthUser(user, this.storage, this.config.MEDIA_URL_TTL_SECONDS),
+      session,
+    };
   }
 
-  async updateProfile(userId: string, input: UpdateProfileInput): Promise<AuthUser> {
+  async updateProfile(
+    userId: string,
+    input: UpdateProfileInput,
+  ): Promise<AuthUser> {
+    // If the caller is setting an avatar, verify the attachment belongs
+    // to them and is ready for use.
+    if (input.avatarMediaId) {
+      const media = await this.db.mediaAttachment.findUnique({
+        where: { id: input.avatarMediaId },
+      });
+      if (
+        !media ||
+        media.ownerId !== userId ||
+        media.status !== 'COMPLETED'
+      ) {
+        throw Errors.badRequest('Avatar not found or not ready');
+      }
+    }
+
     const user = await this.db.user.update({
       where: { id: userId },
-      data: { displayName: input.displayName },
+      data: {
+        ...(input.displayName !== undefined
+          ? { displayName: input.displayName }
+          : {}),
+        ...(input.avatarMediaId !== undefined
+          ? { avatarMediaId: input.avatarMediaId }
+          : {}),
+      },
     });
-    return toAuthUser(user);
+
+    return await toAuthUser(user, this.storage, this.config.MEDIA_URL_TTL_SECONDS);
   }
 
   async logout(sessionId: string): Promise<void> {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { Check, AlertCircle, Info, X} from "lucide-react";
+import { Check, AlertCircle, AlertTriangle, Info, X} from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
 
@@ -68,6 +68,7 @@ export function ToastProvider({ children }: { children: React.ReactNode}) {
         showToast,
         hideToast: dismiss,
         dismiss,
+        warningToast: (message: string) => showToast(message, { variant: 'warning' }),
     }), [showToast, dismiss]);
 
     return (
@@ -113,7 +114,7 @@ function ToastContainer({
     toast: Toast;
     onDismiss: (id: string) => void;
   }) {
-    const Icon = toast.variant === 'error' ? AlertCircle : toast.variant === 'info' ? Info : Check;
+    const Icon = toast.variant === 'error' ? AlertCircle : toast.variant === 'warning' ? AlertTriangle : toast.variant === 'info' ? Info : Check;
   
     return (
       <div
