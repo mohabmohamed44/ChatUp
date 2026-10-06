@@ -669,7 +669,11 @@ silently and the recording still works
 - Message editing
 - Local cache for messages and conversations
 
+
+
 ## 2026-10-03 — Concurrency verification, copy message, DB pointer fix
+
+
 
 ### Concurrency verification
 
@@ -677,6 +681,7 @@ Ran `apps/server/scripts/test-concurrent-sends.ts` with 50 parallel sends
 against the local stack.
 
 Results:
+
 - Sent: 50, OK: 50, Failed: 0
 - Total time: 949ms (19ms average per message)
 - Rows in DB: 50
@@ -688,6 +693,7 @@ performance test — the full 100-user load test runs after Phase 6
 deployment.
 
 Script reads credentials from `.env`:
+
 - `SEED_USER_EMAIL`
 - `SEED_USER_PASSWORD`
 - `API_URL`
@@ -703,10 +709,10 @@ Added in `apps/web/src/features/chat/components/MessageBubble.tsx`.
 - Icon becomes a checkmark for 1.5 seconds to confirm
 - Only shown for text messages with a non-empty body
 - Keyboard accessible (focus-visible) and screen-reader friendly
-  (`aria-label="Copy message"`)
+(`aria-label="Copy message"`)
 - Colors match the bubble: light on own, slate on other
 - `title` attribute removed to prevent the native tooltip from
-  overlaying the timestamp
+overlaying the timestamp
 
 Verified: copy works on own and other messages, preserves newlines,
 emoji, and mixed Arabic/English text. No copy icon on image or voice
@@ -724,78 +730,107 @@ newest remaining message. The application code was correct — the bug
 was in the DB state.
 
 **Fix:**
+
 - Repair SQL repopulated `lastMessageId` and `lastActivityAt` from the
-  newest message per conversation
+newest message per conversation
 - Added a defensive fallback in `loadRowsForUser()` in
-  `conversations.service.ts` — if `row.lastMessage` is null but
-  messages exist, it fetches the latest one before returning. The extra
-  query runs only for affected rows.
+`conversations.service.ts` — if `row.lastMessage` is null but
+messages exist, it fetches the latest one before returning. The extra
+query runs only for affected rows.
 
 **Verified:**
+
 - Fallback proven by temporarily re-nulling the pointer; the API still
-  returned the correct preview
+returned the correct preview
 - `send()` updates the pointer on every message (verified with a
-  test send)
+test send)
 - All 3 conversation rows now have a non-null `lastMessageId`
 - `npx tsc --noEmit` passes
 
+
+
 ### Next
+
 - Message editing (schema + socket event + inline edit UI)
 - Local cache for messages and conversations
 - 100-user load test (after Phase 6 deployment)
 
 
+
 ## 2026-10-04 — Message edit, delete, copy toast, info modal
 
+
+
 ### Message editing
+
 - `Message.editedAt` column + migration
 - `editMessage()`: sender-only, text-only, 15-minute window
 - Pencil icon in the bubble; composer enters edit mode
 - `(edited)` label next to the timestamp
 - Optimistic update with rollback; real-time via `message:edited`
 
+
+
 ### Message deletion
+
 - `Message.deletedAt` column + migration
 - `deleteMessage()`: sender-only, soft delete, idempotent
 - Trash icon, confirmation dialog, placeholder for deleted messages
 - Conversation list preview updates on delete
 
+
+
 ### Copy toast
+
 - `ToastProvider` with three variants and a shrinking progress bar
 - Wired to the copy message button
 - No dependencies; CSS-animated progress
 
+
+
 ### Message info modal
+
 - `MessageInfoModal` shows sent, delivered, read, and played timestamps
 - Info button in the bubble opens it
 - Backend exposes `deliveredAt`, `readAt`, `playedAt` on `Message`
 - `useConversationMessages` merges them into state on socket events
 
+
+
 ### Files
+
 - Backend: schema + 3 migrations, messages.service, messages.routes
 - Shared: types, schemas, events, realtime
 - Frontend: ToastProvider, MessageInfoModal, MessageBubble,
-  MessageComposer, useConversationMessages, chat page
+MessageComposer, useConversationMessages, chat page
+
+
 
 ### Verified
+
 - Typecheck passes on all workspaces
 - Two-browser test: edit, delete, copy, info modal all work
 - RTL: all features render correctly in Arabic
 
 
+
 ## 2026-10-5 - Jump to latest, Unread-Message Divider
+
+
 
 ### Unread divider
 
 **Added**
+
 - Divider in `MessageList.tsx` that appears above the first unread
-  message
+message
 - `initialUnreadCount` captured once on mount via a ref in `page.tsx`
-  so it does not flash to 0 after `markRead` fires
+so it does not flash to 0 after `markRead` fires
 - Divider index computed with `useMemo` and clamped to 0 when unreadCount
-  exceeds the currently loaded messages
+exceeds the currently loaded messages
 
 **Verified**
+
 - Two-browser test: divider appears on the recipient side
 - Divider disappears on next visit once messages are read
 - No divider when unreadCount is 0
@@ -806,6 +841,7 @@ was in the DB state.
 ### Jump to latest
 
 **Added**
+
 - Floating "Latest" button in `MessageList.tsx`
 - Appears when scrolled up more than 300px
 - Smooth-scrolls to the newest message
@@ -813,6 +849,7 @@ was in the DB state.
 - `ArrowDown` icon from lucide-react
 
 **Verified**
+
 - Button appears on scroll up
 - Click scrolls smoothly
 - Button hides at the bottom
@@ -820,44 +857,57 @@ was in the DB state.
 - Mobile: renders correctly
 
 
+
 ## 2026-10-06 — Profile page with avatar upload
+
+
 
 ### Backend
 
 **Schema**
+
 - No schema changes — `User.avatarMediaId` already existed
 
 **AuthService**
+
 - Constructor now takes `StorageService` alongside `db` and `config`
 - `toAuthUser()` is async and generates a signed URL for the avatar via
-  `storage.signedGetUrl('attachments/<avatarMediaId>', ttl)`
+`storage.signedGetUrl('attachments/<avatarMediaId>', ttl)`
 - `updateProfile()` now handles `avatarMediaId`:
   - Validates the attachment exists, is owned by the user, and is
-    `COMPLETED`
+  `COMPLETED`
   - Updates both `displayName` and `avatarMediaId` when provided
   - Returns `AuthUser` with a fresh signed avatar URL
 
 **Auth routes**
+
 - `PATCH /auth/profile` already existed; it now returns a user with a
-  signed `avatarUrl`
+signed `avatarUrl`
 - `GET /auth/me` returns the same shape
 
 **Config**
+
 - Confirmed `MEDIA_URL_TTL_SECONDS` in `AppConfig`
+
+
 
 ### Frontend
 
-**`apps/web/src/features/auth/api.ts`**
+`apps/web/src/features/auth/api.ts`
+
 - Added `updateProfile(input: UpdateProfileInput): Promise<{ user }>`
 
-**`apps/web/src/shared/providers/AuthProvider.tsx`**
-- Exposed `setUser` from the context so other components can update the
-  cached user after a profile change
+`apps/web/src/shared/providers/AuthProvider.tsx`
 
-**`apps/web/src/features/profile/api.ts`** (new)
+- Exposed `setUser` from the context so other components can update the
+cached user after a profile change
+
+`apps/web/src/features/profile/api.ts` (new)
+
 - Re-exports `me` as `fetchProfile` to keep profile code self-contained
 
-**`apps/web/src/app/(app)/settings/profile/page.tsx`** (new)
+`apps/web/src/app/(app)/settings/profile/page.tsx` (new)
+
 - New route `/settings/profile`
 - Fetches the latest profile from `/auth/me` on mount
 - Uses the cached user from `AuthProvider` for instant render
@@ -872,34 +922,41 @@ was in the DB state.
   - Syncs `AuthProvider` so the sidebar updates instantly
 - Full RTL support — back arrow flips, layout mirrors
 
-**`apps/web/src/features/conversations/components/ConversationList.tsx`**
+`apps/web/src/features/conversations/components/ConversationList.tsx`
+
 - Sidebar footer is now a `Link` to `/settings/profile`
 - Shows the user's avatar if set, initials otherwise
 
-**`apps/web/src/features/chat/components/ChatHeader.tsx`**
+`apps/web/src/features/chat/components/ChatHeader.tsx`
+
 - Renders the other participant's avatar image when available, initials
-  otherwise
+otherwise
 - Presence dot sits on top of the avatar
 - RTL-correct positioning
 
-**`apps/web/src/features/conversations/components/ConversationItem.tsx`**
+`apps/web/src/features/conversations/components/ConversationItem.tsx`
+
 - Same avatar-or-initials fallback in the conversation list rows
+
+
 
 ### Fixed during this work
 
 - `AuthService` was not receiving `StorageService` — fixed by updating
-  the constructor and the call site in `auth.routes.ts`
+the constructor and the call site in `auth.routes.ts`
 - `toAuthUser` was synchronous and returned `avatarUrl: null` — now async
-  with signed URL generation
+with signed URL generation
 - `updateProfile` was not handling `avatarMediaId` — added validation
-  and the update
+and the update
 - `config.storage.signedUrlTtlSeconds` did not exist — replaced with
-  `config.MEDIA_URL_TTL_SECONDS`
+`config.MEDIA_URL_TTL_SECONDS`
+
+
 
 ### Verified
 
 - Upload a JPEG → avatar appears immediately in the profile page, in the
-  chat header, and in the sidebar footer
+chat header, and in the sidebar footer
 - Refresh → avatar persists
 - Non-image file → error toast; avatar reverts
 - Change avatar to a new image → old signed URL is replaced everywhere
@@ -909,25 +966,31 @@ was in the DB state.
 - `POST /api/media/image` returns 201 with an attachment ID
 - `GET /api/auth/me` returns 200 with a signed `avatarUrl`
 
+
+
 ### Notes
 
 - Avatars are stored in the GCS emulator (local) or GCS (production),
-  not in PostgreSQL. Postgres holds only `avatarMediaId` as a foreign
-  key to `MediaAttachment`.
+not in PostgreSQL. Postgres holds only `avatarMediaId` as a foreign
+key to `MediaAttachment`.
 - Signed URLs have a 900-second TTL. When an avatar URL expires, the
-  next `/auth/me` or conversation fetch regenerates it.
+next `/auth/me` or conversation fetch regenerates it.
 - `UpdateProfileInput` in `packages/shared` supports both `displayName`
-  and `avatarMediaId` as optional fields.
+and `avatarMediaId` as optional fields.
+
+
 
 ### Files touched (Oct 6)
 
 **Backend**
+
 - `apps/server/src/modules/auth/auth.service.ts`
 - `apps/server/src/modules/auth/auth.routes.ts`
 - `apps/server/src/main.ts`
 - `packages/shared/src/auth/schemas.ts` (confirmed `avatarMediaId`)
 
 **Frontend**
+
 - `apps/web/src/features/auth/api.ts`
 - `apps/web/src/shared/providers/AuthProvider.tsx`
 - `apps/web/src/features/profile/api.ts` (new)
@@ -936,6 +999,8 @@ was in the DB state.
 - `apps/web/src/features/conversations/components/ConversationItem.tsx`
 - `apps/web/src/features/chat/components/ChatHeader.tsx`
 
+
+
 ### What is next
 
 - Local cache (IndexedDB) for messages and conversations
@@ -943,3 +1008,161 @@ was in the DB state.
 - PWA + FCM for push notifications
 - Dockerfile + CI/CD + GCP deployment
 - 100-user load test (after deployment)
+
+
+
+## 2026-10-07 — Message Queues (BullMQ) + REDIS_URL
+
+
+
+### Added
+
+- `bullmq` dependency in `apps/server/package.json`
+- `apps/server/src/platform/queue.ts` — BullMQ setup on existing Redis:
+  - `media-cleanup` — hourly
+  - `session-cleanup` — daily
+  - `notifications` — scaffolded for future FCM
+- Media cleanup worker (`modules/media/cleanup.worker.ts`):
+  - Deletes `PENDING` `MediaAttachment` rows older than 1 hour
+  - Skips attachments referenced by a message or used as avatar
+  - Deletes from storage first, then DB
+- Session cleanup worker (`modules/auth/session.cleanup.worker.ts`):
+  - Deletes expired (`expiresAt < now`) and revoked (`revokedAt != null`) sessions
+- Workers registered in `main.ts` with graceful shutdown
+- Hourly media cleanup job, daily session cleanup job
+- Optional Bull Board dashboard (`/admin/queues`, dev-only)
+
+
+
+### Config / Environment
+
+- Added `REDIS_URL` to:
+  - `apps/server/.env`
+  - `apps/server/.env.example`
+  - `apps/server/src/platform/config.ts` schema as `z.string().url()`
+- `queue.ts` uses `config.REDIS_URL` with `maxRetriesPerRequest: null`
+- Redis connection is separate from the normal Redis client for BullMQ
+
+
+
+### Why BullMQ
+
+- Redis already in the stack
+- No new service to run
+- Built-in retries, exponential backoff, dead letter queue
+- Supports delayed, repeated, and cron jobs
+- `bull-board` available for inspection
+
+
+
+### Verified
+
+- Manual media cleanup run deleted an orphaned `PENDING` row
+- Session cleanup deleted an expired session
+- BullMQ keys appear in Redis (`bull:media-cleanup:*`, `bull:session-cleanup:*`)
+- Server boots cleanly with workers registered
+- `REDIS_URL` validation passes; no `Invalid environment variables` error
+
+
+
+### Notes
+
+- Message sending remains synchronous — it does NOT go through a queue
+- Only background/fire-and-forget work is queued
+- FCM push jobs will be added when PWA + FCM is built
+- Common pitfalls avoided:
+  - `maxRetriesPerRequest: null` set
+  - Separate connection for workers
+  - `await worker.close()` on shutdown
+  - `removeOnComplete` / `removeOnFail` configured
+
+Here's the full walkthrough of everything I did for the queues feature, step by step:
+
+## Step 0 - Mapped the starting point
+
+- **Found:** `docker-compose.yml` already had Redis + `fake-gcs-server`, and `storage.ts` (GCS) worked — so no infra changes needed.
+- **Found:** `platform/queue.ts` declared 3 queues but had **zero workers** — jobs would pile up and never run.
+- **Found:** message sends, receipts, and uploads were all synchronous; presence was an in-memory `Map`; no redis-adapter — so a second server instance would be blind.
+- **Decision:** keep the synchronous DB write as the correctness core (persist-before-ack, idempotent), and put durability + side effects on queues with sync fallback.
+
+
+
+## Step 1 - Installed missing dependencies
+
+- Added `@socket.io/redis-adapter` (multi-instance socket fan-out) and `sharp` (image thumbnails) to `@chatup/server`.
+- Why: adapter lets any instance/worker emit into the correct Socket.IO rooms; sharp extracts dimensions and generates thumbnails.
+
+
+
+## Step 2 - Rewrote `platform/queue.ts` (the heart of the feature)
+
+- **Defined 7 queues:** `message-persistence`, `offline-notifications`, `media-processing`, `read-receipts`, `dead-letter` (per spec) + kept `media-cleanup`, `session-cleanup`.
+- **Typed job payloads** (`PersistMessageJob`, `ReadReceiptJob`, …) so producers/workers can't drift.
+- **Enqueue helpers** (`enqueueMessagePersist`, `enqueueReadReceipt`, …):
+  - Idempotent job IDs (`persist_<conv>_<sender>_<clientId>`), so retries collapse instead of duplicating.
+  - Throw `QueueUnavailableError` when Redis is down → every caller falls back to sync (app works single-node without Redis).
+- **Workers** (`startWorkers`), each with its own Redis connection + tuned concurrency:
+  - *persist* (10): writes the message via `MessagesService.send()`, then fans out offline notifications.
+  - *read-receipts* (20): stamps delivered/read in bulk.
+  - *notifications* (5): skips users who reconnected while the job waited (push provider plugs in here; currently a structured log).
+  - *media* (5): sharp thumbnail + width/height backfill.
+  - *cleanup* (1 each): stale `PENDING` uploads, expired/revoked sessions, on repeatable schedules (30 min / hourly).
+  - *dead-letter* (1): permanently failed jobs are moved there with reason + payload for inspection.
+- **Ops surface:** `queueHealth()` (powers `GET /api/queues/health`), `closeQueues()` for graceful shutdown, `getPersistQueueEvents()` so senders can await worker completion.
+
+
+
+## Step 3 - Added `StorageService.getBuffer()`
+
+- Workers need to *read* objects (thumbnails), but storage only had `put` + `signedGetUrl`. One small method closed that gap.
+
+
+
+## Step 4 - Wired the redis-adapter (`realtime/io.ts`)
+
+- After creating the Socket.IO server, attach `createAdapter(pub, sub)` on Redis — wrapped in try/catch so dev/tests without Redis keep the in-memory adapter.
+- Passed `presence` into the message-socket registration so handlers can check online state.
+
+
+
+## Step 5 - Put sends on the queue (`messages.routes.ts` + `messages.service.ts`)
+
+- `message:send` → `sendViaQueueOrDirect()`: enqueue persist job → `waitUntilFinished` (8s timeout) → re-read via new `getByClientId()` (read-only, no double-emit) → fallback to direct `send()` on any failure.
+- Added `MessagesService.getByClientId()` so the ack can be built from the worker's write without emitting twice.
+- Added offline fan-out inside `send()`: after emit, enqueue notifications only for currently-offline participants (constructor takes an optional `presence` — no break to existing callers).
+
+
+
+## Step 6 - Put receipts on the queue
+
+- `message:read` and the `message:new` delivery-ack now `enqueueReadReceipt()` with immediate direct-write fallback, so read states never stall when Redis is down.
+
+
+
+## Step 7 - Put media post-processing on the queue
+
+- After upload completes in `media.routes.ts`, fire-and-forget `enqueueMediaProcessing()` — the HTTP 201 stays fast; the worker fills in dimensions + thumbnail. Failures are swallowed (original is already usable).
+
+
+
+## Step 8 - Wired startup/shutdown (`main.ts`)
+
+- `await startWorkers({ db, config, logger, storage, io, presence })` after routes; added `GET /api/queues/health` and `/api/queues/dead-letter`; `closeQueues()` joins the shutdown sequence.
+- Added missing `REDIS_URL` to `.env.example`.
+
+
+
+## Step 9 - Verified end to end
+
+- `typecheck` clean; server boots with all 7 workers + `redis-adapter enabled` in logs.
+- Wrote a throwaway two-user socket script (login ×2 → connect ×2 → queued send → realtime match → idempotent-retry dedupe → GCS upload → queue health/dead-letter). Full pass.
+- `vitest` 10/10 after fixing the test-double bug.
+
+
+
+## Step 10 - Fixed 3 bugs found during verification
+
+- **BullMQ** `:` **in job IDs:** every enqueue threw (`Custom Id cannot contain :`) and silently fell back to sync — the queue path was never actually engaged. Switched to `_` separators.
+- **Thumbnail child key** (`<key>/thumb-320`): fake-gcs-server can't nest under an existing object. Sibling key (`<key>-thumb-320`) works on emulator and real GCS.
+- **Test fake id mismatch** (`media.routes.test.ts`): map keyed by `att-N` while the record carried the route's uuid → update missed → 500. Key by `data.id ?? att-N`.
+
