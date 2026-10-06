@@ -53,6 +53,11 @@ export class StorageService {
       .save(body, { contentType, resumable: false });
   }
 
+  async getBuffer(key: string): Promise<Buffer> {
+    const [buf] = await this.client.bucket(this.bucketName).file(key).download();
+    return buf;
+  }
+
   async signedGetUrl(key: string, ttlSeconds: number): Promise<string> {
     const [url] = await this.client
       .bucket(this.bucketName)

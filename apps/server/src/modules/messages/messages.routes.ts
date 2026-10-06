@@ -17,6 +17,55 @@ import type { Logger } from '../../platform/logger';
 import type { StorageService } from '../../platform/storage';
 import type { ChatIo } from '../../realtime/io';
 import { MessagesService } from './messages.service';
+import {
+  enqueueReadReceipt,
+  enqueueMessagePersist,
+  getPersistQueueEvents,
+  isRedisHealthy,
+} from '../../platform/queue';
+
+/** Timeout waiting for the persist worker before falling back to direct send. */
+const PERSIST_VIA_QUEUE_TIMEOUT_MS = 8000;
+
+/**
+ * Primary send path: durable queue when Redis is healthy, synchronous direct
+ * write otherwise. Exactly-once is preserved in both paths by the
+ * (conversationId, senderId, clientId) unique constraint — the worker and the
+ * fallback share the same idempotency key, so a retry never duplicates.
+ */
+async function sendViaQueueOrDirect(
+  service: MessagesService,
+  logger: Logger,
+  payload: Parameters<MessagesService['send']>[0],
+  senderId: string,
+): Promise<Message> {
+  if (await isRedisHealthy()) {
+    try {
+      const job = await enqueueMessagePersist({
+        conversationId: payload.conversationId,
+        senderId,
+        clientId: payload.clientId,
+        kind: payload.kind as 'text' | 'image' | 'audio',
+        body: payload.body,
+        attachmentId: payload.attachmentId,
+      });
+      const events = getPersistQueueEvents();
+      if (events) {
+        await job.waitUntilFinished(events, PERSIST_VIA_QUEUE_TIMEOUT_MS);
+        const persisted = await service.getByClientId(
+          payload.conversationId,
+          senderId,
+          payload.clientId,
+          senderId,
+        );
+        if (persisted) return persisted;
+      }
+    } catch (err) {
+      logger.debug({ err }, 'queue persist path failed, falling back to direct send');
+    }
+  }
+  return service.send(payload, senderId);
+}
 
 export function createMessagesModule(deps: {
   db: Db;
@@ -55,9 +104,10 @@ export function registerMessageSocketEvents(deps: {
   logger: Logger;
   io: ChatIo;
   storage: StorageService;
+  presence?: { isOnline(userId: string): boolean };
 }): void {
-  const { db, config, logger, io, storage } = deps;
-  const service = new MessagesService(db, io, storage, config, logger);
+  const { db, config, logger, io, storage, presence } = deps;
+  const service = new MessagesService(db, io, storage, config, logger, presence);
 
   io.on('connection', (socket) => {
     const userId = socket.data.userId;
@@ -66,7 +116,7 @@ export function registerMessageSocketEvents(deps: {
       MESSAGE_EVENTS.send,
       async (payload, ack: (result: Ack<Message>) => void) => {
         try {
-          const message = await service.send(payload, userId);
+          const message = await sendViaQueueOrDirect(service, logger, payload, userId);
           ack?.({ ok: true, data: message });
         } catch (err) {
           logger.warn({ err, userId }, 'message:send failed');
@@ -85,7 +135,18 @@ export function registerMessageSocketEvents(deps: {
       MESSAGE_EVENTS.read,
       async (payload, ack: (result: Ack<null>) => void) => {
         try {
-          await service.markRead(payload.conversationId, userId, payload.upToMessageId);
+          // Async receipts: enqueue for the worker, fall back to direct write
+          // when Redis is down so read states never stall.
+          try {
+            await enqueueReadReceipt({
+              type: 'read',
+              conversationId: payload.conversationId,
+              userId,
+              upToMessageId: payload.upToMessageId,
+            });
+          } catch {
+            await service.markRead(payload.conversationId, userId, payload.upToMessageId);
+          }
           ack?.({ ok: true, data: null });
         } catch (err) {
           logger.warn({ err, userId }, 'message:read failed');
@@ -185,11 +246,20 @@ export function registerMessageSocketEvents(deps: {
             ack?.();
             return;
           }
-          await service.markDelivered(
-            payload.message.conversationId,
-            userId,
-            [payload.message.id],
-          );
+          try {
+            await enqueueReadReceipt({
+              type: 'delivered',
+              conversationId: payload.message.conversationId,
+              userId,
+              messageIds: [payload.message.id],
+            });
+          } catch {
+            await service.markDelivered(
+              payload.message.conversationId,
+              userId,
+              [payload.message.id],
+            );
+          }
           ack?.();
         } catch {
           ack?.();

@@ -175,7 +175,25 @@ export class MessagesService {
     private readonly storage: StorageService,
     private readonly config: { MEDIA_URL_TTL_SECONDS: number },
     private readonly logger: Logger,
+    private readonly presence?: { isOnline(userId: string): boolean },
   ) {}
+
+  /** Read-only lookup backing the queued-send ack (no emit, no side effects). */
+  async getByClientId(
+    conversationId: string,
+    senderId: string,
+    clientId: string,
+    viewerId: string,
+  ): Promise<Message | null> {
+    const row = await this.db.message.findUnique({
+      where: {
+        conversationId_senderId_clientId: { conversationId, senderId, clientId },
+      },
+      include: { attachment: true },
+    });
+    if (!row) return null;
+    return toMessage(this.db, this.storage, this.config, row, viewerId);
+  }
 
   // ---------------------------------------------------------------------------
   // Send
@@ -276,7 +294,37 @@ export class MessagesService {
 
     await this.emitConversationUpdate(input.conversationId);
 
+    // Offline fan-out (fire-and-forget): recipients not currently connected
+    // get a notification job; the worker suppresses it if they reconnect
+    // before it runs. Never blocks the send ack.
+    void this.enqueueOfflineFanout(input, senderId, payload).catch((err) =>
+      this.logger.debug({ err }, 'offline fan-out enqueue failed'),
+    );
+
     return payload;
+  }
+
+  private async enqueueOfflineFanout(
+    input: SendMessageInput,
+    senderId: string,
+    payload: Message,
+  ): Promise<void> {
+    if (!this.presence) return;
+    const svc = new ConversationsService(this.db, this.storage, this.config);
+    const participantIds = await svc.participantIds(input.conversationId);
+    const offline = participantIds.filter(
+      (id) => id !== senderId && !this.presence!.isOnline(id),
+    );
+    if (offline.length === 0) return;
+    const { enqueueOfflineNotification } = await import('../../platform/queue');
+    await enqueueOfflineNotification({
+      messageId: payload.id,
+      conversationId: input.conversationId,
+      senderId,
+      recipientIds: offline,
+      preview:
+        input.kind === 'text' ? (input.body ?? '').slice(0, 160) || null : `[${input.kind}]`,
+    });
   }
 
   // ---------------------------------------------------------------------------

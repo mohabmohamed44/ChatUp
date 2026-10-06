@@ -42,6 +42,24 @@ export function createRealtime(
   const io: ChatIo = new Server(httpServer, {
     cors: { origin: deps.config.corsOrigins, credentials: true },
   });
+
+  // Multi-instance fan-out: publishes/broadcasts go through Redis so a worker
+  // or a second API instance emits to the correct rooms. Falls back to
+  // in-memory when Redis is down (single-instance dev / tests).
+  void (async () => {
+    try {
+      const { createAdapter } = await import('@socket.io/redis-adapter');
+      const { Redis } = await import('ioredis');
+      const pub = new Redis(deps.config.REDIS_URL, { maxRetriesPerRequest: null });
+      const sub = pub.duplicate();
+      await Promise.all([pub.ping(), sub.ping()]);
+      io.adapter(createAdapter(pub, sub));
+      deps.logger.info('Socket.IO redis-adapter enabled');
+    } catch (err) {
+      deps.logger.warn({ err }, 'Socket.IO redis-adapter unavailable; using in-memory adapter');
+    }
+  })();
+
   presence.bind(io);
 
   io.use(async (socket, next) => {
@@ -65,6 +83,7 @@ export function createRealtime(
     logger: deps.logger,
     io,
     storage: deps.storage,
+    presence,
   });
 
   io.on('connection', (socket) => {
