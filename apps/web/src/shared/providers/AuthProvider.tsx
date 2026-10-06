@@ -19,6 +19,8 @@ import {
   updateAvatar as updateAvatarRequest,
 } from '../../features/auth/api';
 import { getSocket } from '../lib/socket';
+import { clearCache, getCachedUserId, pruneOldData, setCachedUserId } from '../lib/cache';
+import { AwardIcon } from 'lucide-react';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -40,7 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     fetchMe()
       .then((response) => {
-        if (!cancelled) setUser(response.user);
+        if (cancelled) return;
+        setUser(response.user);
+        // Persist userId so meta is populated on reload, not just login/register.
+        if (response.user) void setCachedUserId(response.user.id);
       })
       .catch(() => {
         if (!cancelled) setUser(null);
@@ -52,6 +57,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Prune 7-day-old cached data once on app start. Failures never break the app.
+  useEffect(() => {
+    void pruneOldData();
+  }, []);
+
+  // Clear local cache on logout / unauthenticated state.
+  useEffect(() => {
+    if (user === null && isLoading === false) {
+      void clearCache();
+    }
+  }, [user, isLoading]);
 
   // Global 401 handler: any API call that returns 401 dispatches
   // "chatup:unauthorized". Clear the user so the app redirects to /login.
@@ -92,18 +109,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (input: LoginInput) => {
     const response = await loginRequest(input);
+
+    const previousUserId = await getCachedUserId();
+    if (previousUserId && previousUserId !== response.user.id) {
+      await clearCache();
+    }
+    await setCachedUserId(response.user.id);
     setUser(response.user);
     return response.user;
   }, []);
 
   const register = useCallback(async (input: RegisterInput) => {
     const response = await registerRequest(input);
+    await clearCache();
+    await setCachedUserId(response.user.id);
     setUser(response.user);
     return response.user;
   }, []);
 
   const logout = useCallback(async () => {
     await logoutRequest();
+    await clearCache();
     setUser(null);
   }, []);
 

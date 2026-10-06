@@ -10,6 +10,7 @@ import {
 } from 'react';
 import type { ConversationSummary } from '@chatup/shared';
 import { getSocket } from '@/shared/lib/socket';
+import { cacheConversations, getCachedConversations, setLastSyncAt } from '@/shared/lib/cache';
 import { listConversations } from '../api';
 
 export interface ConversationsValue {
@@ -31,11 +32,30 @@ function useConversationsState(): ConversationsValue {
       const { conversations: next } = await listConversations();
       setConversations(next);
       setError(null);
+      void cacheConversations(next);
+      void setLastSyncAt(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load conversations');
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  // Hydrate from cache before the network refetch for instant open.
+  useEffect(() => {
+    let cancelled = false;
+    getCachedConversations()
+      .then((cached) => {
+        if (cancelled || cached.length === 0) return;
+        setConversations(cached);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        // ignore — refetch will still run
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -54,7 +74,11 @@ function useConversationsState(): ConversationsValue {
                 item.id === payload.conversation.id ? payload.conversation : item,
               )
             : [payload.conversation, ...prev];
-        return [...next].sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
+        const sorted = [...next].sort((a, b) =>
+          b.lastActivityAt.localeCompare(a.lastActivityAt),
+        );
+        void cacheConversations(sorted);
+        return sorted;
       });
     }
 
