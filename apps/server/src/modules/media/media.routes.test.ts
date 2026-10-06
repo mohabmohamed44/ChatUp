@@ -67,8 +67,10 @@ describe('POST /api/media/:kind - image mime & size validation', () => {
     return {
       mediaAttachment: {
         create: vi.fn(async ({ data }: any) => {
-          const id = `att-${++idCounter}`;
-          const rec = { id, ...data, storageKey: data.storageKey ?? '', status: 'PENDING', createdAt: new Date(), width: null, height: null };
+          // The route supplies its own `id` (randomUUID); the fake must key
+          // by the record's real id or the subsequent update misses (500).
+          const id = data.id ?? `att-${++idCounter}`;
+          const rec = { ...data, id, storageKey: data.storageKey ?? '', status: 'PENDING', createdAt: new Date(), width: null, height: null };
           attachments.set(id, rec);
           return rec;
         }),

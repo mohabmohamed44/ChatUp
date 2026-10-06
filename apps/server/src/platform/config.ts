@@ -9,6 +9,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   DATABASE_URL: z.string().min(1),
+  REDIS_URL: z.string().url(),
   SESSION_SECRET: z.string().min(16),
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(2_592_000),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),

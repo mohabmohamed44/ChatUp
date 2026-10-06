@@ -140,6 +140,20 @@ export function createMediaModule(deps: {
         data: { status: 'COMPLETED' },
       });
 
+      // Async post-processing (thumbnails, metadata) — fire-and-forget so the
+      // upload response stays fast. The worker marks COMPLETED metadata; if
+      // Redis is down the original is already usable as-is.
+      void import('../../platform/queue')
+        .then(({ enqueueMediaProcessing }) =>
+          enqueueMediaProcessing({
+            attachmentId: completed.id,
+            storageKey,
+            kind,
+            mimeType: detected,
+          }),
+        )
+        .catch(() => {});
+
       const result: MediaUploadResult = {
         attachment: {
           id: completed.id,
