@@ -6,6 +6,7 @@ import {
   type Ack,
   type ClientMessageStatus,
   type Message,
+  type MessageDeliveryStatus,
   type MessagePlayedUpdate,
   type MessageStatusUpdate,
   type Page,
@@ -17,6 +18,7 @@ import {
   deleteMessage as deleteMessageRequest,
   markPlayed as markPlayedRequest,
 } from '../api';
+import { cacheMessages, getCachedMessages } from '@/shared/lib/cache';
 
 const PAGE_SIZE = 30;
 const SYNC_PAGE_LIMIT = 50;
@@ -96,6 +98,19 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
   return sortMessages([...byId.values()]);
 }
 
+function toCacheable(messages: ChatMessage[]): Message[] {
+  const out: Message[] = [];
+  for (const m of messages) {
+    if (m.status === 'pending' || m.status === 'failed') continue;
+    out.push({ ...m, status: m.status as MessageDeliveryStatus });
+  }
+  return out;
+}
+
+function persistMessages(conversationId: string, messages: ChatMessage[]): void {
+  void cacheMessages(conversationId, toCacheable(messages));
+}
+
 export function useConversationMessages(conversationId: string, currentUserId: string) {
   const [socket] = useState(getSocket);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -123,6 +138,7 @@ export function useConversationMessages(conversationId: string, currentUserId: s
   }, [conversationId]);
 
   // Initial load. Resets state so switching conversations never flashes stale messages.
+  // 1. Hydrate from cache first for instant open, 2. then fetch fresh.
   useEffect(() => {
     let cancelled = false;
     lastReadMessageIdRef.current = null;
@@ -131,23 +147,40 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     setError(null);
     setIsLoading(true);
 
+    getCachedMessages(conversationId)
+      .then((cached) => {
+        if (cancelled || cached.length === 0) return;
+        setMessages(sortMessages(cached));
+        setIsLoading(false);
+      })
+      .catch(() => {
+        // Cache failures never break the app; the server fetch below still runs.
+      });
+
+    // 2. Fetch fresh from the server
     fetchMessageHistory(conversationId, { limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
-        setMessages(sortMessages(page.items));
+        const fresh = sortMessages(page.items);
+        setMessages(fresh);
         setNextCursor(page.nextCursor);
+        persistMessages(conversationId, fresh);
       })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load messages');
+      .catch((err) => {
+        if (!cancelled) {
+          // Only show error if we had no cache
+          if (messagesRef.current.length === 0) {
+            setError(err instanceof Error ? err.message : 'Failed to load');
+          }
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
-  }, [conversationId, reloadToken]);
+  }, [conversationId, currentUserId, reloadToken]);
 
   // Live message and status updates.
   useEffect(() => {
@@ -161,7 +194,11 @@ export function useConversationMessages(conversationId: string, currentUserId: s
           (incoming.clientId !== null && message.clientId === incoming.clientId),
       );
 
-      setMessages((prev) => mergeMessages(prev, [incoming]));
+      setMessages((prev) => {
+        const next = mergeMessages(prev, [incoming]);
+        persistMessages(conversationId, next);
+        return next;
+      });
 
       // Confirm delivery for messages sent by the other participant.
       if (!alreadyKnown && incoming.senderId !== currentUserId) {
@@ -172,8 +209,8 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     function onStatus(payload: MessageStatusUpdate) {
       if (payload.conversationId !== conversationId) return;
       const affected = new Set(payload.messageIds);
-      setMessages((prev) =>
-        prev.map((message) => {
+      setMessages((prev) => {
+        const next = prev.map((message) => {
           if (!affected.has(message.id)) return message;
           const nextStatus =
             STATUS_RANK[payload.status] > STATUS_RANK[message.status]
@@ -189,8 +226,10 @@ export function useConversationMessages(conversationId: string, currentUserId: s
             readAt:
               payload.status === 'read' ? (message.readAt ?? payload.at) : message.readAt,
           };
-        }),
-      );
+        });
+        persistMessages(conversationId, next);
+        return next;
+      });
     }
 
     socket.on(MESSAGE_EVENTS.new, onNew);
@@ -199,30 +238,36 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     function onEdited(payload: { message: Message }) {
       const incoming = payload.message;
       if (incoming.conversationId !== conversationId) return;
-      setMessages((prev) =>
-        prev.map((m) => (m.id === incoming.id ? { ...m, ...incoming } : m)),
-      );
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === incoming.id ? { ...m, ...incoming } : m));
+        persistMessages(conversationId, next);
+        return next;
+      });
     }
 
     function onDeleted(payload: { message: Message }) {
       const incoming = payload.message;
       if (incoming.conversationId !== conversationId) return;
-      setMessages((prev) =>
-        prev.map((m) => (m.id === incoming.id ? { ...m, ...incoming } : m)),
-      );
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === incoming.id ? { ...m, ...incoming } : m));
+        persistMessages(conversationId, next);
+        return next;
+      });
     }
 
     socket.on(MESSAGE_EVENTS.edited, onEdited);
     socket.on(MESSAGE_EVENTS.deleted, onDeleted);
 
     function onPlayed(payload: MessagePlayedUpdate) {
-      setMessages((prev) =>
-        prev.map((m) =>
+      setMessages((prev) => {
+        const next = prev.map((m) =>
           m.id === payload.messageId
             ? { ...m, playedAt: m.playedAt ?? payload.playedAt }
             : m,
-        ),
-      );
+        );
+        persistMessages(conversationId, next);
+        return next;
+      });
     }
 
     socket.on(MESSAGE_EVENTS.played, onPlayed);
@@ -256,7 +301,11 @@ export function useConversationMessages(conversationId: string, currentUserId: s
 
       if (!result || !result.ok || result.data.items.length === 0) return;
 
-      setMessages((prev) => mergeMessages(prev, result.data.items));
+      setMessages((prev) => {
+        const next = mergeMessages(prev, result.data.items);
+        persistMessages(conversationId, next);
+        return next;
+      });
       afterSequence = result.data.nextCursor;
     }
   }, [conversationId, socket]);
@@ -330,7 +379,11 @@ export function useConversationMessages(conversationId: string, currentUserId: s
       // The user may have switched conversations while the fetch was in
       // flight — drop the result instead of merging it into the wrong chat.
       if (conversationIdRef.current !== startedFor) return;
-      setMessages((prev) => mergeMessages(prev, page.items));
+      setMessages((prev) => {
+        const next = mergeMessages(prev, page.items);
+        persistMessages(startedFor, next);
+        return next;
+      });
       setNextCursor(page.nextCursor);
       setError(null);
     } catch (err: unknown) {
@@ -346,18 +399,26 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     setReloadToken((token) => token + 1);
   }, []);
 
-  const appendOptimistic = useCallback((message: ChatMessage) => {
-    setMessages((prev) => mergeMessages(prev, [message]));
-  }, []);
+  const appendOptimistic = useCallback(
+    (message: ChatMessage) => {
+      setMessages((prev) => mergeMessages(prev, [message]));
+    },
+    [],
+  );
 
-  const replaceOptimistic = useCallback((clientId: string, real: Message) => {
-    setMessages((prev) =>
-      mergeMessages(
-        prev.filter((message) => message.clientId !== clientId),
-        [real],
-      ),
-    );
-  }, []);
+  const replaceOptimistic = useCallback(
+    (clientId: string, real: Message) => {
+      setMessages((prev) => {
+        const next = mergeMessages(
+          prev.filter((message) => message.clientId !== clientId),
+          [real],
+        );
+        persistMessages(conversationIdRef.current, next);
+        return next;
+      });
+    },
+    [],
+  );
 
   const markFailed = useCallback((clientId: string) => {
     setMessages((prev) =>
@@ -371,23 +432,30 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     async (messageId: string, newBody: string) => {
       // Optimistic update
       const previous = messagesRef.current.find((m) => m.id === messageId);
-      setMessages((prev) =>
-        prev.map((m) =>
+      const cid = conversationIdRef.current;
+      setMessages((prev) => {
+        const next = prev.map((m) =>
           m.id === messageId
             ? { ...m, body: newBody, editedAt: new Date().toISOString() }
             : m,
-        ),
-      );
+        );
+        persistMessages(cid, next);
+        return next;
+      });
 
       const ack = await editMessageRequest(messageId, newBody);
       if (!ack.ok) {
         // Rollback
         if (previous) {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === messageId ? previous : m)),
-          );
+          setMessages((prev) => {
+            const next = prev.map((m) => (m.id === messageId ? previous : m));
+            persistMessages(cid, next);
+            return next;
+          });
         }
         setError(ack.error.message);
+      } else {
+        persistMessages(cid, messagesRef.current);
       }
     },
     [],
@@ -396,8 +464,9 @@ export function useConversationMessages(conversationId: string, currentUserId: s
   const deleteMessageAction = useCallback(
     async (messageId: string) => {
       const previous = messagesRef.current.find((m) => m.id === messageId);
-      setMessages((prev) =>
-        prev.map((m) =>
+      const cid = conversationIdRef.current;
+      setMessages((prev) => {
+        const next = prev.map((m) =>
           m.id === messageId
             ? {
                 ...m,
@@ -406,17 +475,23 @@ export function useConversationMessages(conversationId: string, currentUserId: s
                 deletedAt: new Date().toISOString(),
               }
             : m,
-        ),
-      );
+        );
+        persistMessages(cid, next);
+        return next;
+      });
 
       const ack = await deleteMessageRequest(messageId);
       if (!ack.ok) {
         if (previous) {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === messageId ? previous : m)),
-          );
+          setMessages((prev) => {
+            const next = prev.map((m) => (m.id === messageId ? previous : m));
+            persistMessages(cid, next);
+            return next;
+          });
         }
         setError(ack.error.message);
+      } else {
+        persistMessages(cid, messagesRef.current);
       }
     },
     [],
@@ -428,16 +503,23 @@ export function useConversationMessages(conversationId: string, currentUserId: s
       if (!previous || previous.playedAt || previous.senderId === currentUserId) return;
 
       const playedAt = new Date().toISOString();
-      setMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, playedAt } : m)),
-      );
+      const cid = conversationIdRef.current;
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === messageId ? { ...m, playedAt } : m));
+        persistMessages(cid, next);
+        return next;
+      });
 
       const ack = await markPlayedRequest(messageId, conversationId);
       if (!ack.ok) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === messageId ? previous : m)),
-        );
+        setMessages((prev) => {
+          const next = prev.map((m) => (m.id === messageId ? previous : m));
+          persistMessages(cid, next);
+          return next;
+        });
         console.warn('[played] failed', ack.error);
+      } else {
+        persistMessages(cid, messagesRef.current);
       }
     },
     [conversationId, currentUserId],
