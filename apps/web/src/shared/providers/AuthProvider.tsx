@@ -15,6 +15,7 @@ import {
   logout as logoutRequest,
   me as fetchMe,
   register as registerRequest,
+  unregisterFcmToken,
   type UpdateAvatarInput,
   updateAvatar as updateAvatarRequest,
 } from '../../features/auth/api';
@@ -128,6 +129,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Stop push delivery to this device before the session dies.
+    // Best-effort: logout must succeed even if this fails (already logged out,
+    // offline, …).
+    try {
+      await unregisterFcmToken();
+    } catch {
+      // Ignore — session revocation below is the real cleanup.
+    }
     await logoutRequest();
     await clearCache();
     setUser(null);

@@ -12,12 +12,14 @@ export type Toast = {
     message: string;
     variant: ToastVariant;
     duration: number;
+    onClick?: () => void;
 }
 
 type ToastContextValue = {
     showToast: (message: string, options?: {
         variant?: ToastVariant;
         duration?: number;
+        onClick?: () => void;
     }) => void;
     hideToast: (id: string) => void;
     dismiss: (id: string) => void;
@@ -45,9 +47,10 @@ export function ToastProvider({ children }: { children: React.ReactNode}) {
         const id = crypto.randomUUID();
         const duration = options?.duration ?? DEFAULT_DURATION;
         const variant = options?.variant ?? 'success';
+        const onClick = options?.onClick;
 
         setToasts((prev) => {
-            const next = [...prev, { id, message, variant, duration }];
+            const next = [...prev, { id, message, variant, duration, onClick }];
             return next.slice(-MAX_VISIBLE);
         });
 
@@ -115,10 +118,11 @@ function ToastContainer({
     onDismiss: (id: string) => void;
   }) {
     const Icon = toast.variant === 'error' ? AlertCircle : toast.variant === 'warning' ? AlertTriangle : toast.variant === 'info' ? Info : Check;
-  
+
     return (
       <div
         role="status"
+        onClick={toast.onClick}
         className={cn(
           'pointer-events-auto relative min-w-[220px] max-w-sm overflow-hidden rounded-lg shadow-lg',
           'animate-[toast-slide-up_200ms_ease-out]',
@@ -126,6 +130,7 @@ function ToastContainer({
           toast.variant === 'error' && 'bg-red-600 text-white',
           toast.variant === 'info' && 'bg-blue-600 text-white',
           toast.variant === 'warning' && 'bg-yellow-600 text-white',
+          toast.onClick && 'cursor-pointer',
         )}
       >
         <div className="flex items-center gap-2 px-4 py-3 pr-10">

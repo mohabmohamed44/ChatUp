@@ -21,6 +21,19 @@ const envSchema = z.object({
   GCS_BUCKET: z.string().min(1).default('chatup-media'),
   GCS_EMULATOR_URL: z.string().default(''),
   MEDIA_URL_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  // Firebase Cloud Messaging for offline push (optional, disabled by default).
+  // Auth prefers an explicit key file (FCM_SERVICE_ACCOUNT_PATH) and falls
+  // back to Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS /
+  // attached service account on GCP).
+  // NOTE: z.coerce.boolean() treats the string "false" as true — stringbool
+  // parses "true"/"false" correctly.
+  FCM_ENABLED: z.stringbool().default(false),
+  FCM_PROJECT_ID: z.string().default(''),
+  FCM_DRY_RUN: z.stringbool().default(false),
+  FCM_SERVICE_ACCOUNT_PATH: z.string().default(''),
+  // Public base URL of the web app (https in production / tunnel tests).
+  // Used for absolute FCM webpush link + icon URLs (FCM requires absolute URLs).
+  APP_URL: z.string().default('http://localhost:3000'),
 });
 
 const parsed = envSchema.safeParse(process.env);

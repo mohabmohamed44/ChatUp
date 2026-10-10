@@ -37,6 +37,7 @@ model User {
   sessions     Session[]
   sentMessages Message[]                @relation("SentMessages")
   receipts     MessageReceipt[]
+  pushAcks     PushAck[]
   attachments  MediaAttachment[]        @relation("AttachmentOwner")
   participants ConversationParticipant[]
 }
@@ -50,7 +51,7 @@ model Session {
   expiresAt DateTime
   createdAt DateTime  @default(now())
   revokedAt DateTime?
-
+  fid String?
   @@index([userId])
 }
 
@@ -99,6 +100,7 @@ model Message {
   lastMessageOf Conversation[]   @relation("ConversationLastMessage")
   readMarkers  ConversationParticipant[] @relation("LastReadMessage")
   receipts     MessageReceipt[]
+  pushAcks     PushAck[]
   editedAt     DateTime?
   deletedAt    DateTime?
 
@@ -139,4 +141,22 @@ model MessageReceipt {
 
   @@id([messageId, userId])
   @@index([userId, readAt])
+}
+
+// Push-notification acknowledgement, beaconed by the service worker after it
+// displays a notification ('displayed') and when the user taps it ('clicked').
+// Observational only: unlike MessageReceipt it never drives ticks/read state.
+model PushAck {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  status    String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, status])
+  @@index([messageId])
+  @@index([userId])
 }

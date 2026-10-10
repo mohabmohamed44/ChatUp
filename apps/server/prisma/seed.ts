@@ -36,7 +36,7 @@ async function main(): Promise<void> {
 
   const alice = await db.user.upsert({
     where: { email: 'alice@chatup.dev' },
-    update: {},
+    update: { passwordHash, displayName: 'Alice Demo' },
     create: {
       email: 'alice@chatup.dev',
       passwordHash,
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
 
   const bob = await db.user.upsert({
     where: { email: 'bob@chatup.dev' },
-    update: {},
+    update: { passwordHash, displayName: 'Bob Demo' },
     create: {
       email: 'bob@chatup.dev',
       passwordHash,
