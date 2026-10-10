@@ -10,6 +10,10 @@ coverage/
 .env.*
 .env.example
 
+# Firebase Admin service-account keys (private) — never commit.
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+
 npm-debug.log*
 *.pem
 .DS_Store
@@ -20,3 +24,10 @@ apps/server/prisma/*.db
 playwright-report/
 test-results/
 load-test/results/
+
+# Generated service worker (built from scripts/sw.template.js + env vars
+# by scripts/generate-sw.mjs via predev/prebuild). Template is committed.
+apps/web/public/sw.js
+
+# Committed env documentation (negates the .env.* / .env.example rules above).
+!apps/web/.env.example
