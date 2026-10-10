@@ -30,6 +30,7 @@ export const updateProfileSchema = z.object({
     .max(LIMITS.DISPLAY_NAME_MAX)
     .optional(),
     avatarMediaId: z.string().nullable().optional(),
+    fid: z.string().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

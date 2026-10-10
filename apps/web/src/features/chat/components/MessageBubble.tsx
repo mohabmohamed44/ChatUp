@@ -47,13 +47,22 @@ export function MessageBubble({
 
   const EDIT_WINDOW_MS = 15 * 60 * 1000;
 
+  // Re-evaluate the 15-minute edit window live (otherwise Date.now() in render
+  // only recomputes when something else re-renders).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const isDeleted = Boolean(message.deletedAt);
   const canEdit =
     !isDeleted &&
     isOwn &&
     message.kind === 'text' &&
     message.status !== 'failed' &&
-    Date.now() - new Date(message.createdAt).getTime() < EDIT_WINDOW_MS;
+    message.status !== 'pending' &&
+    now - new Date(message.createdAt).getTime() < EDIT_WINDOW_MS;
   const canDelete = !isDeleted && isOwn;
   const canShowInfo =
     isOwn &&
@@ -63,10 +72,42 @@ export function MessageBubble({
     message.status !== 'failed';
   const hasMenu = canEdit || canDelete || canShowInfo;
 
+  // Diagnostic: when the menu opens but Edit is hidden, say which gate
+  // blocked it. Open DevTools → Console and look for "[MessageBubble]".
+  const editBlockReason =
+    isDeleted
+      ? 'deleted'
+      : !isOwn
+        ? 'not-own'
+        : message.kind !== 'text'
+          ? `kind-${message.kind}`
+          : message.status === 'failed'
+            ? 'failed'
+            : message.status === 'pending'
+              ? 'pending-no-server-ack-yet'
+              : now - new Date(message.createdAt).getTime() >= EDIT_WINDOW_MS
+                ? 'expired-older-than-15min'
+                : onEdit == null
+                  ? 'no-onEdit-handler'
+                  : null;
+
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+
+  useEffect(() => {
+    if (menuOpen && !canEdit) {
+      console.debug('[MessageBubble] Edit hidden', {
+        messageId: message.id,
+        reason: editBlockReason,
+        status: message.status,
+        kind: message.kind,
+        isOwn,
+        createdAt: message.createdAt,
+      });
+    }
+  }, [menuOpen, canEdit, editBlockReason, message.id, message.status, message.kind, message.createdAt, isOwn]);
 
   // Close the menu on outside click or Escape, returning focus to the trigger.
   useEffect(() => {
@@ -164,7 +205,8 @@ export function MessageBubble({
                 aria-label="Copy message"
                 className={cn(
                   'rounded p-0.5 transition-opacity',
-                  'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
+                  // Hover-only: hidden until the bubble is hovered/focused.
+                  'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
                   copied && 'opacity-100',
                   isOwn
                     ? 'text-indigo-100 hover:bg-white/10 hover:text-white'
@@ -191,7 +233,9 @@ export function MessageBubble({
                   aria-expanded={menuOpen}
                   className={cn(
                     'rounded p-0.5 transition-opacity',
-                    'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
+                    // Always visible on touch (no hover) and when focused/open;
+                    // hover-revealed only on desktop.
+                    'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100',
                     menuOpen && 'opacity-100',
                     isOwn
                       ? 'text-indigo-100 hover:bg-white/10 hover:text-white'

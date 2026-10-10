@@ -53,6 +53,7 @@ export function LoginForm() {
       return;
     }
 
+    if (isSubmitting) return;
     setFieldErrors({});
     setIsSubmitting(true);
     try {

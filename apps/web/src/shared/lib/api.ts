@@ -47,12 +47,12 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     credentials: 'same-origin',
   });
 
-  // Handle expired or missing session globally.
-  // Any 401 dispatches an event that the AuthProvider listens for.
-  if (response.status === 401) {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('chatup:unauthorized'));
-    }
+  // Session expiry only — a failed login/register (or anonymous /auth/me)
+  // is also 401 and must not look like "logged out" / retrigger auth.
+  const isAuthHandshake =
+    path === '/auth/login' || path === '/auth/register' || path === '/auth/me';
+  if (response.status === 401 && !isAuthHandshake && typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('chatup:unauthorized'));
   }
 
   if (!response.ok) {
@@ -70,6 +70,11 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       // Response body was not JSON; keep the fallback error info.
     }
     throw new ApiError(response.status, code, message, details);
+  }
+
+  // 204 No Content (e.g. DELETE /auth/fcm-token) has no body to parse.
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;

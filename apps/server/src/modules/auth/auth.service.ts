@@ -86,6 +86,7 @@ export class AuthService {
   async updateProfile(
     userId: string,
     input: UpdateProfileInput,
+    sessionId: string,
   ): Promise<AuthUser> {
     // If the caller is setting an avatar, verify the attachment belongs
     // to them and is ready for use.
@@ -114,7 +115,35 @@ export class AuthService {
       },
     });
 
+    // FCM registration is bound to the session that registered it (one FID
+    // per device session). An FID identifies ONE browser install, so detach
+    // it from any other session first (prevents user A's push appearing in
+    // user B's browser after a re-login). Empty string clears.
+    if (input.fid !== undefined) {
+      const token = input.fid.trim().slice(0, 1024) || null;
+      await this.db.$transaction(async (tx) => {
+        if (token) {
+          await tx.session.updateMany({
+            where: { fid: token, id: { not: sessionId } },
+            data: { fid: null },
+          });
+        }
+        await tx.session.updateMany({
+          where: { id: sessionId },
+          data: { fid: token },
+        });
+      });
+    }
+
     return await toAuthUser(user, this.storage, this.config.MEDIA_URL_TTL_SECONDS);
+  }
+
+  /** Removes the FCM registration (FID) from a session (logout / opt-out). */
+  async clearFid(sessionId: string): Promise<void> {
+    await this.db.session.updateMany({
+      where: { id: sessionId },
+      data: { fid: null },
+    });
   }
 
   async logout(sessionId: string): Promise<void> {

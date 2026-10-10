@@ -96,8 +96,19 @@ export function createAuthModule(deps: {
       const auth = req.auth;
       if (!auth) throw Errors.unauthorized();
       const input = updateProfileSchema.parse(req.body);
-      const user = await service.updateProfile(auth.userId, input);
+      const user = await service.updateProfile(auth.userId, input, auth.sessionId);
       res.json({ user });
+    }),
+  );
+
+  router.delete(
+    '/auth/fcm-token',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const auth = req.auth;
+      if (!auth) throw Errors.unauthorized();
+      await service.clearFid(auth.sessionId);
+      res.status(204).end();
     }),
   );
 

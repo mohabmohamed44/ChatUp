@@ -9,6 +9,7 @@ export * from './messages/types';
 export * from './messages/schemas';
 export * from './messages/events';
 export * from './media/types';
+export * from './notifications/schemas';
 export * from './presence/types';
 export * from './presence/events';
 export * from './realtime';

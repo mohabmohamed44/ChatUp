@@ -290,7 +290,15 @@ export class MessagesService {
 
     this.io
       .to(SOCKET_ROOMS.conversation(input.conversationId))
-      .emit(MESSAGE_EVENTS.new, { message: payload });
+      .emit(MESSAGE_EVENTS.new, {
+        message: payload,
+        // Lets online recipients show the sender in toasts/OS alerts without
+        // an extra lookup; optional so old clients keep working.
+        ...(await this.db.user
+          .findUnique({ where: { id: senderId }, select: { displayName: true } })
+          .then((u) => (u?.displayName ? { senderName: u.displayName } : {}))
+          .catch(() => ({}))),
+      });
 
     await this.emitConversationUpdate(input.conversationId);
 

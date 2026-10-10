@@ -33,6 +33,11 @@ export function logout(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>('/auth/logout', { method: 'POST' });
 }
 
+/** Best-effort: stop push delivery to this device. Safe to call logged-out. */
+export function unregisterFcmToken(): Promise<unknown> {
+  return apiFetch<unknown>('/auth/fcm-token', { method: 'DELETE' });
+}
+
 export function updateAvatar(input: UpdateAvatarInput): Promise<{ user: AuthUser }> {
   return apiFetch<{ user: AuthUser }>('/auth/profile', { method: 'PATCH', body: input });
 }

@@ -1,6 +1,7 @@
 import { Queue, Worker, QueueEvents, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { config } from './config';
+import type { FcmService } from './fcm';
 import { logger } from './logger';
 
 /**
@@ -235,6 +236,7 @@ export interface WorkerDeps {
   config: import('./config').AppConfig;
   logger: import('./logger').Logger;
   storage: import('./storage').StorageService;
+  fcm: FcmService;
   io: import('../realtime/io').ChatIo;
   presence: { isOnline(userId: string): boolean };
 }
@@ -356,18 +358,75 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
       // Suppress if the recipient came online while the job was delayed.
       const stillOffline = job.data.recipientIds.filter((id) => !deps.presence.isOnline(id));
       if (stillOffline.length === 0) return { suppressed: true };
-      // Push provider (FCM/APNs) plugs in here. Structured log keeps the
-      // contract observable until a provider is configured.
+
+      // FCM registrations (FIDs) live on Session (one per device). Only live
+      // sessions with an FID can receive push.
+      const sessions = await deps.db.session.findMany({
+        where: {
+          userId: { in: stillOffline },
+          fid: { not: null },
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { userId: true, fid: true },
+      });
+      const tokens = [...new Set(sessions.map((s) => s.fid!.trim()).filter(Boolean))];
+      if (tokens.length === 0) {
+        deps.logger.info(
+          { messageId: job.data.messageId, recipients: stillOffline },
+          'offline push skipped: recipients have no registered FCM token',
+        );
+        return { skipped: true, recipients: stillOffline };
+      }
+
+      const sender = await deps.db.user.findUnique({
+        where: { id: job.data.senderId },
+        select: { displayName: true },
+      });
+
+      const result = await deps.fcm.sendPush({
+        tokens,
+        notification: {
+          title: sender?.displayName ?? 'New message',
+          ...(job.data.preview ? { body: job.data.preview.slice(0, 160) } : {}),
+        },
+        data: {
+          conversationId: job.data.conversationId,
+          messageId: job.data.messageId,
+          senderId: job.data.senderId,
+          // Service worker shows `رسالة من ${senderName}` for data-only
+          // payloads and logs the sender; keep keys as strings for FCM.
+          ...(sender?.displayName ? { senderName: sender.displayName } : {}),
+        },
+      });
+
+      // A job that sent nothing must not look like success in the logs.
+      if (result.skippedReason) {
+        deps.logger.warn(
+          { messageId: job.data.messageId, reason: result.skippedReason },
+          'offline push NOT sent',
+        );
+      }
+
+      // Prune dead registrations so we don't push to them forever.
+      if (result.invalidTargets.length > 0) {
+        await deps.db.session
+          .updateMany({
+            where: { fid: { in: result.invalidTargets } },
+            data: { fid: null },
+          })
+          .catch((err) => deps.logger.warn({ err }, 'failed to prune dead FCM registrations'));
+      }
+
       deps.logger.info(
         {
           messageId: job.data.messageId,
           conversationId: job.data.conversationId,
-          recipients: stillOffline,
-          preview: job.data.preview,
+          ...result,
         },
-        'offline notification (push provider not configured)',
+        'offline push sent',
       );
-      return { notified: stillOffline };
+      return { notified: stillOffline, ...result };
     },
     { connection: makeRedis(), concurrency: 5 },
   );
@@ -502,7 +561,8 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
     activeWorkers.push(w);
   }
 
-  queueEvents = new QueueEvents(QUEUES.MESSAGE_PERSISTENCE, { connection: makeRedis() });  await scheduleRecurringJobs();
+  queueEvents = new QueueEvents(QUEUES.MESSAGE_PERSISTENCE, { connection: makeRedis() });
+  await scheduleRecurringJobs();
   deps.logger.info(
     { queues: all.map((w) => w.name) },
     'BullMQ workers started',
