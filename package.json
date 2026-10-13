@@ -25,10 +25,15 @@
     "test:watch": "vitest",
     "test:unit": "vitest run --project shared --project web --passWithNoTests",
     "test:integration": "vitest run --project server",
-    "test:cov": "vitest run --coverage"
+    "test:cov": "vitest run --coverage",
+    "load:seed": "tsx load-test/seed-load.ts",
+    "load:bundle": "esbuild load-test/k6/chatup.load.ts --bundle --format=esm --platform=neutral --external:k6 --external:k6/* --outfile=load-test/k6/dist/chatup.load.js --log-level=warning",
+    "load:smoke": "npm run load:bundle && k6 run -e K6_PROFILE=smoke -e K6_BASE_URL=${K6_BASE_URL:-http://localhost:4000} load-test/k6/dist/chatup.load.js",
+    "load": "npm run load:bundle && k6 run -e K6_PROFILE=full -e K6_BASE_URL=${K6_BASE_URL:-http://localhost:4000} load-test/k6/dist/chatup.load.js"
   },
   "devDependencies": {
     "artillery": "^2.0.34",
+    "esbuild": "^0.28.2",
     "prettier": "^3.0.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"

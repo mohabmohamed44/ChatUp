@@ -1,0 +1,274 @@
+name: CD
+
+# Assessment-environment deploy to GCP: server + web → Cloud Run (HTTPS),
+# PostgreSQL → Cloud SQL, Redis → Memorystore, media → GCS, secrets →
+# Secret Manager. Mirrors docs/architecture.md §2 (same code, env-selected
+# backends) and project.md §17 (HTTPS, persistent DB, object storage,
+# socket proxy/timeout config, health endpoint, migrations).
+#
+# ONE-TIME GCP SETUP (manual, creates the billable resources — see project.md
+# §17 re: documenting costs, no unauthorized paid resources):
+#   gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
+#     sqladmin.googleapis.com redis.googleapis.com secretmanager.googleapis.com \
+#     iamcredentials.googleapis.com
+#   gcloud artifacts repositories create chatup --repository-format=docker \
+#     --location=$REGION
+#   # Cloud SQL (Postgres 16), Memorystore (Redis 7), GCS bucket, then:
+#   printf '%s' "$DATABASE_URL" | gcloud secrets create DATABASE_URL --data-file=-
+#   printf '%s' "$SESSION_SECRET" | gcloud secrets create SESSION_SECRET --data-file=-
+#   printf '%s' "$REDIS_URL" | gcloud secrets create REDIS_URL --data-file=-
+#   # Workload Identity Federation for GitHub (no static keys):
+#   # create pool + provider for repo <owner>/chatUp, allow the Cloud Run
+#   # admin / Cloud SQL client / Secret Manager accessor roles on a deploy SA.
+#
+# NETWORKING (required for Memorystore Redis):
+#   Cloud Run runs outside the VPC by default, so Memorystore's private IP
+#   (10.31.42.11) is unreachable without Direct VPC Egress. The `deploy-server`
+#   job passes --network/--subnet/--vpc-egress so the container can reach Redis.
+#   `default` is the auto-mode VPC network + subnet created with the project;
+#   Cloud SQL's VPC peering routes traffic to Memorystore's IP range. If you
+#   ever move Redis to a different region, update these flags accordingly.
+#
+# REPO CONFIG (Settings → Secrets and variables → Actions):
+#   Create a `production` Environment (Settings → Environments) and put the
+#   secrets below inside it — jobs reference it via `environment: production`,
+#   which scopes the secrets and allows required-reviewer approval gates.
+#   Vars (required):  GCP_PROJECT_ID, CLOUDSQL_CONNECTION (project:region:instance),
+#                     CORS_ORIGIN + APP_URL (stable web URL — custom domain recommended),
+#                     NEXT_PUBLIC_API_URL (stable server URL), GCS_PROJECT_ID, GCS_BUCKET
+#   Vars (optional):  GCP_REGION (default europe-west1), GCP_AR_REPO (default chatup),
+#                     NEXT_PUBLIC_SOCKET_URL (defaults to NEXT_PUBLIC_API_URL),
+#                     NEXT_PUBLIC_FIREBASE_* (push config; empty = push stays disabled)
+#   Secrets:          GCP_WIF_PROVIDER, GCP_SERVICE_ACCOUNT
+#   Secret Manager:   DATABASE_URL, SESSION_SECRET, REDIS_URL
+#
+# First deploy is bootstrapping: Cloud Run service URLs are stable per service,
+# so after the first run, set CORS_ORIGIN / APP_URL / NEXT_PUBLIC_API_URL to the
+# real service URLs (or custom domains) and re-run — NEXT_PUBLIC_* bake into the
+# web image at build time and cannot be changed at runtime.
+#
+# Rollback: `gcloud run services update-traffic chatup-server --to-revisions
+# <prev>=100` (same for chatup-web); migrations use versioned `prisma migrate
+# deploy` only — never `db push`.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+  AR_REPO: ${{ vars.GCP_AR_REPO || 'chatup' }}
+  CLOUDSQL_CONNECTION: ${{ vars.CLOUDSQL_CONNECTION }}
+
+jobs:
+  build-push:
+    name: Build + push images
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      server-image: ${{ steps.push-server.outputs.image }}
+      web-image: ${{ steps.push-web.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/metadata-action@v6
+        id: meta-server
+        with:
+          images: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-server
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+      - uses: docker/metadata-action@v6
+        id: meta-web
+        with:
+          images: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-web
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Build + push server image
+        id: push-server
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          push: true
+          tags: ${{ steps.meta-server.outputs.tags }}
+          labels: ${{ steps.meta-server.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build + push web image
+        id: push-web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # NEXT_PUBLIC_* inline at build time — must be the STABLE prod URLs,
+          # not the just-deployed revision (see header bootstrap note).
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_SOCKET_URL=${{ vars.NEXT_PUBLIC_SOCKET_URL || vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_FIREBASE_API_KEY=${{ vars.NEXT_PUBLIC_FIREBASE_API_KEY }}
+            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ vars.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+            NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ vars.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+            NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ vars.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+            NEXT_PUBLIC_FIREBASE_APP_ID=${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID }}
+            NEXT_PUBLIC_FIREBASE_VAPID_KEY=${{ vars.NEXT_PUBLIC_FIREBASE_VAPID_KEY }}
+
+  migrate:
+    name: Prisma migrate deploy
+    needs: [build-push]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      # Runs BEFORE traffic shifts: versioned migrations only, fails the
+      # pipeline instead of booting the app on a wrong schema.
+      # Cloud SQL is reached via the mounted Unix socket (/cloudsql/...) —
+      # no VPC egress needed for this job since migrations only touch Postgres.
+      - name: Execute migration job
+        run: |
+          gcloud run jobs deploy chatup-migrate \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --image="${{ needs.build-push.outputs.server-image }}" \
+            --command=npx --args="prisma,migrate,deploy" \
+            --add-cloudsql-instances="$CLOUDSQL_CONNECTION" \
+            --set-secrets="DATABASE_URL=DATABASE_URL:latest" \
+            --max-retries=0 \
+            --task-timeout=10m \
+            --quiet
+          gcloud run jobs execute chatup-migrate \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --wait \
+            --quiet
+
+  deploy-server:
+    name: Deploy API to Cloud Run
+    needs: [build-push, migrate]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy + smoke-test
+        id: deploy
+        run: |
+          URL=$(gcloud run deploy chatup-server \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --image="${{ needs.build-push.outputs.server-image }}" \
+            --allow-unauthenticated \
+            --port=4000 \
+            --timeout=3600 \
+            --session-affinity \
+            --cpu=2 --memory=1Gi \
+            --concurrency=500 \
+            --min-instances=0 --max-instances=10 \
+            --add-cloudsql-instances="$CLOUDSQL_CONNECTION" \
+            --network=default \
+            --subnet=default \
+            --vpc-egress=private-ranges-only \
+            --set-secrets="DATABASE_URL=DATABASE_URL:latest,SESSION_SECRET=SESSION_SECRET:latest,REDIS_URL=REDIS_URL:latest" \
+            --set-env-vars="NODE_ENV=production,PORT=4000,CORS_ORIGIN=${{ vars.CORS_ORIGIN }},APP_URL=${{ vars.APP_URL }},GCS_PROJECT_ID=${{ vars.GCS_PROJECT_ID }},GCS_BUCKET=${{ vars.GCS_BUCKET }}" \
+            --format='value(status.url)' \
+            --quiet)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          # --timeout=3600 + --session-affinity: Socket.IO needs long-lived
+          # connections; with the redis-adapter rooms span instances
+          # (docs/architecture.md §7), affinity keeps reconnects stable.
+          #
+          # --network/--subnet/--vpc-egress=private-ranges-only: attaches the
+          # service to the default VPC so Memorystore Redis (private IP
+          # 10.31.42.11) is reachable. Only private-range traffic goes through
+          # the VPC; public egress (GCS API, FCM, Cloud Logging) uses Cloud
+          # Run's normal egress path. Without these flags the server boots
+          # but BullMQ and the Socket.IO redis-adapter fail with ECONNREFUSED.
+          curl -fsS "$URL/healthz" > /dev/null
+          curl -fsS "$URL/readyz" > /dev/null
+
+  deploy-web:
+    name: Deploy web to Cloud Run
+    needs: [build-push]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy + smoke-test
+        id: deploy
+        run: |
+          URL=$(gcloud run deploy chatup-web \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --image="${{ needs.build-push.outputs.web-image }}" \
+            --allow-unauthenticated \
+            --port=3000 \
+            --cpu=1 --memory=512Mi \
+            --min-instances=0 --max-instances=10 \
+            --format='value(status.url)' \
+            --quiet)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          curl -fsS "$URL/" > /dev/null
+
+  smoke:
+    name: End-to-end smoke
+    needs: [deploy-server, deploy-web]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check liveness, readiness, and web serving
+        run: |
+          echo "server: ${{ needs.deploy-server.outputs.url }}"
+          echo "web:    ${{ needs.deploy-web.outputs.url }}"
+          curl -fsS "${{ needs.deploy-server.outputs.url }}/healthz"
+          echo
+          curl -fsS "${{ needs.deploy-server.outputs.url }}/readyz"
+          echo
+          curl -fsS "${{ needs.deploy-web.outputs.url }}/" > /dev/null
+          echo "smoke OK"

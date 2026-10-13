@@ -1,0 +1,120 @@
+name: CI
+
+# Matches AGENTS.md §5 + project.md §16: formatting, type checking,
+# relevant tests, and a production web build on every push / PR.
+#
+# Playwright E2E is intentionally NOT run here (needs browsers + a live
+# two-user stack); run it locally per docs. Artillery load tests are
+# manual-only sustained runs, not per-push.
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Format + typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # Prisma client is gitignored (apps/server/src/generated) — required
+      # before typecheck/tests that import it.
+      - run: npm run prisma:generate
+      - run: npm run format:check
+      - run: npm run typecheck
+
+  unit:
+    name: Unit tests (shared + web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+
+  integration:
+    name: Server integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chatup
+          POSTGRES_PASSWORD: chatup
+          POSTGRES_DB: chatup
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U chatup -d chatup"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Test setup (apps/server/src/test/setup.ts) only ever touches a
+      # *_test database and Redis db 15 — never the dev database / db 0.
+      DATABASE_URL: postgresql://chatup:chatup@localhost:5432/chatup_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      SESSION_SECRET: ci-session-secret-min-32-chars-long
+      GCS_BUCKET: chatup-media-ci
+      CORS_ORIGIN: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - name: Create test database + apply migrations
+        run: |
+          PGPASSWORD=chatup psql -h localhost -U chatup -d chatup -c 'CREATE DATABASE chatup_test;'
+          npm run db:deploy -w @chatup/server
+      - run: npm run test:integration
+
+  web-build:
+    name: Web production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # NEXT_PUBLIC_* are inlined at build time (and consumed by
+      # scripts/generate-sw.mjs). Dummy values are enough to prove the
+      # production build compiles; real values are build-args in cd.yml.
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+      NEXT_PUBLIC_FIREBASE_API_KEY: ci-dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ci-dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: ci-dummy
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ci-dummy
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ci-dummy
+      NEXT_PUBLIC_FIREBASE_APP_ID: ci-dummy
+      NEXT_PUBLIC_FIREBASE_VAPID_KEY: ci-dummy
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @chatup/web
