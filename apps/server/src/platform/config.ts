@@ -20,6 +20,13 @@ const envSchema = z.object({
   GCS_PROJECT_ID: z.string().default(''),
   GCS_BUCKET: z.string().min(1).default('chatup-media'),
   GCS_EMULATOR_URL: z.string().default(''),
+  // Optional public origin override for emulator signed URLs. The signed URL
+  // host comes from GCS_EMULATOR_URL, which inside Docker is a service name
+  // (http://gcs:4443) unreachable from browsers. Set this to the host-visible
+  // origin (http://localhost:4443) so downloads work. Leave empty in
+  // production — real GCS URLs are already public-hosted. No signature impact
+  // locally (the emulator does not validate signatures).
+  GCS_PUBLIC_URL: z.string().default(''),
   MEDIA_URL_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   // Firebase Cloud Messaging for offline push (optional, disabled by default).
   // Auth prefers an explicit key file (FCM_SERVICE_ACCOUNT_PATH) and falls
@@ -39,7 +46,9 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  const issues = parsed.error.issues.map((i: z.core.$ZodIssue) => `${i.path.join('.')}: ${i.message}`).join('\n');
+  const issues = parsed.error.issues
+    .map((i: z.core.$ZodIssue) => `${i.path.join('.')}: ${i.message}`)
+    .join('\n');
   throw new Error(`Invalid environment configuration:\n${issues}`);
 }
 
