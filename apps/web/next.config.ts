@@ -1,6 +1,9 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Required by apps/web/Dockerfile: emits .next/standalone + apps/web/server.js
+  // so the runtime stage can run without the full workspace installed.
+  output: 'standalone',
   async headers() {
     return [
       {
