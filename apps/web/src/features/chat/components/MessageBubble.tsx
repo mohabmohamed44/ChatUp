@@ -74,22 +74,21 @@ export function MessageBubble({
 
   // Diagnostic: when the menu opens but Edit is hidden, say which gate
   // blocked it. Open DevTools → Console and look for "[MessageBubble]".
-  const editBlockReason =
-    isDeleted
-      ? 'deleted'
-      : !isOwn
-        ? 'not-own'
-        : message.kind !== 'text'
-          ? `kind-${message.kind}`
-          : message.status === 'failed'
-            ? 'failed'
-            : message.status === 'pending'
-              ? 'pending-no-server-ack-yet'
-              : now - new Date(message.createdAt).getTime() >= EDIT_WINDOW_MS
-                ? 'expired-older-than-15min'
-                : onEdit == null
-                  ? 'no-onEdit-handler'
-                  : null;
+  const editBlockReason = isDeleted
+    ? 'deleted'
+    : !isOwn
+      ? 'not-own'
+      : message.kind !== 'text'
+        ? `kind-${message.kind}`
+        : message.status === 'failed'
+          ? 'failed'
+          : message.status === 'pending'
+            ? 'pending-no-server-ack-yet'
+            : now - new Date(message.createdAt).getTime() >= EDIT_WINDOW_MS
+              ? 'expired-older-than-15min'
+              : onEdit == null
+                ? 'no-onEdit-handler'
+                : null;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -107,7 +106,16 @@ export function MessageBubble({
         createdAt: message.createdAt,
       });
     }
-  }, [menuOpen, canEdit, editBlockReason, message.id, message.status, message.kind, message.createdAt, isOwn]);
+  }, [
+    menuOpen,
+    canEdit,
+    editBlockReason,
+    message.id,
+    message.status,
+    message.kind,
+    message.createdAt,
+    isOwn,
+  ]);
 
   // Close the menu on outside click or Escape, returning focus to the trigger.
   useEffect(() => {
@@ -149,7 +157,10 @@ export function MessageBubble({
   }
 
   return (
-    <div className={cn('flex w-full', isOwn ? 'justify-end' : 'justify-start')}>
+    <div
+      data-sequence={message.sequence}
+      className={cn('flex w-full', isOwn ? 'justify-end' : 'justify-start')}
+    >
       <div className="max-w-[85%] sm:max-w-[75%]">
         <div
           className={cn(
@@ -185,9 +196,7 @@ export function MessageBubble({
                 />
               ) : null}
 
-              {message.kind === 'text' && body ? (
-                <MessageBody text={body} isOwn={isOwn} />
-              ) : null}
+              {message.kind === 'text' && body ? <MessageBody text={body} isOwn={isOwn} /> : null}
             </>
           )}
 
@@ -308,7 +317,9 @@ export function MessageBubble({
               {formatBubbleTimestamp(message.createdAt, locale)}
             </time>
             {message.editedAt && !isDeleted ? (
-              <span className={cn('text-[10px] italic', isOwn ? 'text-indigo-200' : 'text-slate-400')}>
+              <span
+                className={cn('text-[10px] italic', isOwn ? 'text-indigo-200' : 'text-slate-400')}
+              >
                 (edited)
               </span>
             ) : null}
@@ -344,9 +355,7 @@ export function MessageBubble({
         ) : null}
       </div>
 
-      {infoOpen ? (
-        <MessageInfoModal message={message} onClose={() => setInfoOpen(false)} />
-      ) : null}
+      {infoOpen ? <MessageInfoModal message={message} onClose={() => setInfoOpen(false)} /> : null}
     </div>
   );
 }

@@ -13,3 +13,4 @@ export * from './notifications/schemas';
 export * from './presence/types';
 export * from './presence/events';
 export * from './realtime';
+export * from './search/schema';
