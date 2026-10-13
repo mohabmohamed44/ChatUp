@@ -1166,3 +1166,115 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
 - **Thumbnail child key** (`<key>/thumb-320`): fake-gcs-server can't nest under an existing object. Sibling key (`<key>-thumb-320`) works on emulator and real GCS.
 - **Test fake id mismatch** (`media.routes.test.ts`): map keyed by `att-N` while the record carried the route's uuid → update missed → 500. Key by `data.id ?? att-N`.
 
+
+
+## 2026-10-12 — PWA + FCM push notifications
+
+
+
+### Built
+
+**Backend**
+
+- `apps/server/src/platform/fcm.ts` (new) — `FcmService`: Firebase Admin dispatch for push, dry-run mode, disabled-by-default (`FCM_ENABLED=false`), explicit key file or ADC auth
+- `PushAck` model + migration — tracks notification `displayed` / `clicked` states per message per user (observational only, never drives read state)
+- `Session.fid` column + migration — per-session Firebase installation id
+- `modules/notifications/` — `notifications.service.ts` + `notifications.routes.ts` (`GET` for SW beacons + `POST`+CSRF for page callers, idempotent upsert), `pushAckSchema` in `packages/shared`
+- Queue workers enqueue offline notifications; FCM plugged into the `notifications` worker (skips users who reconnected while the job waited)
+- `scripts/test-fcm.ts` — manual FCM verification script
+- `fcm.test.ts` (147 lines) — service-level tests
+
+**Frontend (PWA)**
+
+- `apps/web/src/app/manifest.ts` — Web App Manifest + icons (`192`, `512`, `512-maskable`, `apple-touch-icon`, `favicon`)
+- `scripts/generate-sw.mjs` + `scripts/sw.template.js` — service worker generated on `predev`/`prebuild` (never skip; build depends on it)
+- `ServiceWorkerRegister.tsx` — SW registration component
+- `InstallPrompt.tsx` — Add-to-Home-Screen install banner
+- `app/offline/page.tsx` + `no-connection.svg` — offline fallback page
+- `useFcmToken.ts` (168 lines) — permission flow, token registration, foreground `onMessage` handling
+- `useIncomingMessageAlerts.ts` + `alertIncomingMessage.ts` — socket and FCM alert paths share one deduped helper (dedupe by message id)
+- `(app)/layout.tsx` — `PushNotifications` gate: permission banner only for logged-in users, iOS "Add to Home Screen" guidance, blocked-permission notice
+- `next.config.ts` — PWA build wiring; `firebase` web config via `NEXT_PUBLIC_*` env only (VAPID key never on backend)
+
+**Docs**
+
+- `docs/push-notifications.md`, `docs/fcm-debugging.md`, `docs/architecture.md`, `docs/realtime.md` — comprehensive documentation pass
+
+
+
+### Decisions made
+
+- Push is best-effort/observational: `PushAck` never drives ticks or read state — `MessageReceipt` remains the source of truth
+- Socket stays the realtime core for online users (including hidden tabs); FCM covers offline → online transitions and background
+- iOS requires Home-Screen install for push — surfaced as an in-app guidance banner instead of a silent failure
+
+
+
+### Verified
+
+- `feature/pwa-fcm` merged to `main` (commit `a2c8c67`), docs pass merged after (`d1b698e`)
+- Server boots with FCM worker path; disabled by default so local dev needs no Firebase project
+- `fcm.test.ts` + `notifications.service.test.ts` pass
+
+
+
+### Notes
+
+- FCM needs HTTPS in production (and a tunnel URL in `APP_URL`/`CORS_ORIGIN` for phone testing)
+- Mic/push permissions both require user gestures — banners are the only trigger points
+- Service-account key file is gitignored and never committed
+
+
+
+### Next
+
+- Advanced message search (backend `tsvector` module + frontend `/search`)
+
+
+
+## 2026-10-13 — Advanced search: backend diagnosis + frontend completion
+
+
+
+### Fixed (backend — the 500 on `GET /api/search/messages`)
+
+**Root cause: Postgres enum case mismatch.** `search.service.ts` filtered with `m.kind = 'text'` (lowercase), but `MessageKind` is `('TEXT','IMAGE','AUDIO')` — enums are case-sensitive, so every request failed with `22P02 invalid input value for enum "MessageKind": "text"` (stack pointed at `search.service.ts:63`). Changed to `m.kind = 'TEXT'`. Ruled out the other suspects first: `searchVector` column/trigger exist in dev DB, BigInt is `.toString()`-ed, `websearch_to_tsquery` input validated by Zod (`.min(2)`), router wired in `main.ts`, `req.auth` (not `req.user`) used.
+
+**Test DB was missing the search migration.** `chatup_test` had no `searchVector` column and no trigger (migration `20261013120000_add_search_indexes` never deployed there). Ran `prisma migrate deploy` against `chatup_test` and verified column + `message_search_vector_trigger`. CI must run `migrate deploy` against the test DB or search tests fail with `P2010`.
+
+**"Route not found" red error on `/search` (screenshot).** Not a routing problem — `features/search/api.ts` called `apiFetch('/api/search/messages')` but `apiFetch` already prepends `/api`, so the browser hit `/api/api/search/messages` → 404 `Errors.notFound('Route')` → message surfaced via `useSearch` error state. Fixed to `apiFetch('/search/messages')`, matching the convention in `chat/api.ts`.
+
+
+
+### Built (frontend completion)
+
+- `ConversationList.tsx` — grouped the search + new-chat icon buttons into one right-aligned actions container (they were loose `justify-between` siblings, drifting apart); unified icon size/focus-ring/hover treatment; merged duplicate `lucide-react` import; fixed footer `<Link>` indentation
+- `MessageBubble.tsx` — added `data-sequence={message.sequence}` on the outer bubble (jump target; `sequence` already on shared `Message` type)
+- `[id]/page.tsx` — fixed two jump-to-message bugs: (1) effect ran on `[jumpTo]` only, before async history loaded, so it silently found nothing — now waits on `[jumpTo, messages.length, isLoading]`; (2) moved the effect below `useConversationMessages` (it referenced `messages`/`isLoading` before their `const` declarations → TDZ crash)
+- `search.test.ts` — rewrote from scratch (old file imported non-existent `createApp` and `./helpers/factories`). Now an integration test following `media.routes.test.ts` conventions: per-test express app with `createSearchModule` + stub `requireAuth` bound to the test user, seeded via `requirePrisma()` (auto-truncated `beforeEach`). Fixed expectation 400 → **422** (`http.ts` maps `ZodError` → `validation_error`), `encodeURIComponent` on Arabic/ISO params
+
+
+
+### Verified
+
+- `npx vitest run src/modules/search/search.test.ts` — **5 passed** (snippet `<mark>` highlight, `after` filter, Carol-isolation, short-query 422, Arabic `<mark>باريس</mark>`)
+- `npm run typecheck` — zero errors across all workspaces; Prettier clean on touched files
+- Live curl: `/api/search/messages?q=milestone` previously 500 on every keystroke, now 200 with results + `<mark>` snippets
+- Time-filter semantics confirmed by design (not a bug): "Last 3 months" = `createdAt >= now−90d`, so yesterday's messages correctly match; only "Older than a year" excludes recent. Results order by `rank DESC, sequence DESC` (relevance first)
+
+
+
+### Known limitations
+
+- "Custom range" pill is a no-op — no date pickers in the UI, sends no `after`/`before`, behaves like "Any time"
+- `searchConversations` endpoint exists but has no frontend surface yet
+- Jump-to-message targets only loaded history; a very old `jumpTo` sequence may need "Load earlier" first (no auto-pagination to the target yet)
+
+
+
+### Next
+
+- Commit search fixes (`feat(search): ...`) — files still untracked/modified in working tree
+- Playwright two-user search E2E (`search.spec.ts` — needs real fixtures, the pasted draft references non-existent `./fixtures/twoUsers`)
+- `docs/testing.md` + `docs/load-test.md`, 100-user Artillery run
+

@@ -30,4 +30,4 @@ load-test/results/
 apps/web/public/sw.js
 
 # Committed env documentation (negates the .env.* / .env.example rules above).
-!apps/web/.env.example
+apps/web/.env.example
