@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/features/auth';
 import { ChatHeader } from '@/features/chat/components/ChatHeader';
@@ -25,14 +25,16 @@ export default function ConversationPage() {
   const conversation = conversations.find((item) => item.id === conversationId);
   const participant = conversation?.participants[0];
 
+  const searchParams = useSearchParams();
+  const jumpTo = searchParams.get('jumpTo');
+
   const initialUnreadRef = useRef<{ id: string; count: number } | null>(null);
 
   // Capture once per conversation when it first loads (reset on switch,
   // since the page component is reused across conversation ids)
   if (
     conversation &&
-    (initialUnreadRef.current === null ||
-      initialUnreadRef.current.id !== conversationId)
+    (initialUnreadRef.current === null || initialUnreadRef.current.id !== conversationId)
   ) {
     initialUnreadRef.current = {
       id: conversationId,
@@ -77,6 +79,22 @@ export default function ConversationPage() {
     };
   }, [conversationId]);
 
+  // Jump-to-message from /search: wait until history has loaded and the
+  // target bubble (data-sequence) is rendered, otherwise the querySelector
+  // runs too early and silently does nothing.
+  useEffect(() => {
+    if (!jumpTo || isLoading) return;
+    if (messages.length === 0) return;
+
+    const el = document.querySelector(`[data-sequence="${jumpTo}"]`);
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-yellow-400');
+    const timer = setTimeout(() => el.classList.remove('ring-2', 'ring-yellow-400'), 2000);
+    return () => clearTimeout(timer);
+  }, [jumpTo, messages.length, isLoading]);
+
   if (!user) return null;
 
   if (!conversation) {
@@ -110,7 +128,7 @@ export default function ConversationPage() {
     <div className="flex h-full min-h-0 w-full flex-col bg-slate-50">
       <ChatHeader
         conversation={conversation}
-        presence={participant ? presence[participant.id] ?? 'offline' : 'offline'}
+        presence={participant ? (presence[participant.id] ?? 'offline') : 'offline'}
         isTyping={isTyping}
       />
 

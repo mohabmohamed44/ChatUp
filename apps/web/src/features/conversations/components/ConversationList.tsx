@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { LogOut, MessagesSquare, Plus, X } from 'lucide-react';
+import Link from 'next/link';
+import { LogOut, MessagesSquare, Plus, Search, X } from 'lucide-react';
 import { useAuth } from '@/features/auth';
 import { usePresence } from '@/features/chat/hooks/usePresence';
 import { initialsOf } from '@/shared/lib/format';
@@ -10,7 +11,6 @@ import { useConversations } from '../hooks/useConversations';
 import { LanguageToggle } from '@/shared/components/LanguageToggle';
 import { ConversationItem } from './ConversationItem';
 import { NewChatSearch } from './NewChatSearch';
-import Link from 'next/link';
 
 export function ConversationList() {
   const { user, logout } = useAuth();
@@ -66,21 +66,31 @@ export function ConversationList() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           Conversations
         </h2>
-        <button
-          type="button"
-          onClick={() => setIsNewChatOpen((open) => !open)}
-          aria-expanded={isNewChatOpen}
-          aria-controls="new-chat-panel"
-          aria-label={isNewChatOpen ? 'Close new chat' : 'New chat'}
-          title={isNewChatOpen ? 'Close new chat' : 'New chat'}
-          className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-        >
-          {isNewChatOpen ? (
-            <X className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          )}
-        </button>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/search"
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            aria-label="Search messages"
+            title="Search messages"
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => setIsNewChatOpen((open) => !open)}
+            aria-expanded={isNewChatOpen}
+            aria-controls="new-chat-panel"
+            aria-label={isNewChatOpen ? 'Close new chat' : 'New chat'}
+            title={isNewChatOpen ? 'Close new chat' : 'New chat'}
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            {isNewChatOpen ? (
+              <X className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Plus className="h-4 w-4" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
@@ -126,7 +136,7 @@ export function ConversationList() {
                   conversation={conversation}
                   currentUserId={user?.id ?? ''}
                   isActive={pathname === `/conversations/${conversation.id}`}
-                  presence={other ? presence[other.id] ?? 'offline' : 'offline'}
+                  presence={other ? (presence[other.id] ?? 'offline') : 'offline'}
                 />
               );
             })}
@@ -136,34 +146,32 @@ export function ConversationList() {
 
       {user ? (
         <footer className="border-t border-slate-200 bg-slate-50">
-        <Link
-          href="/settings/profile"
-          className="flex items-center gap-2 px-4 py-2.5 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-        >
-          {user.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              alt=""
-              className="h-8 w-8 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
-              {initialsOf(user.displayName)}
+          <Link
+            href="/settings/profile"
+            className="flex items-center gap-2 px-4 py-2.5 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
+                {initialsOf(user.displayName)}
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-slate-800">
+                {user.displayName}
+              </span>
+              <span className="block truncate text-xs text-slate-400">{user.email}</span>
             </span>
-          )}
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-slate-800">
-              {user.displayName}
+            <span className="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              You
             </span>
-            <span className="block truncate text-xs text-slate-400">
-              {user.email}
-            </span>
-          </span>
-          <span className="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            You
-          </span>
-        </Link>
-      </footer>
+          </Link>
+        </footer>
       ) : null}
     </div>
   );

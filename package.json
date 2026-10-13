@@ -15,16 +15,23 @@
     "dev": "npm run dev -w @chatup/server",
     "dev:server": "npm run dev -w @chatup/server",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate -w @chatup/server",
     "db:migrate": "npm run db:migrate -w @chatup/server",
     "db:seed": "npm run db:seed -w @chatup/server",
+    "db:setup": "npm run db:migrate -w @chatup/server && npm run db:seed -w @chatup/server",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run --project shared --project web --passWithNoTests",
+    "test:integration": "vitest run --project server",
+    "test:cov": "vitest run --coverage"
   },
   "devDependencies": {
+    "artillery": "^2.0.34",
     "prettier": "^3.0.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
   },
   "dependencies": {
     "express-rate-limit": "^8.7.0",

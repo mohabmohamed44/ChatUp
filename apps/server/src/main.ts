@@ -12,6 +12,7 @@ import { createConversationsModule } from './modules/conversations';
 import { createMessagesModule } from './modules/messages';
 import { createMediaModule } from './modules/media';
 import { createNotificationsModule } from './modules/notifications';
+import { createSearchModule } from './modules/search';
 import { createRealtime } from './realtime/io';
 
 async function main(): Promise<void> {
@@ -66,11 +67,16 @@ async function main(): Promise<void> {
     db,
     requireAuth: auth.requireAuth,
   });
+  const searchRouter = createSearchModule({
+    db,
+    requireAuth: auth.requireAuth,
+  });
 
   app.use('/api', conversationsRouter);
   app.use('/api', messagesRouter);
   app.use('/api', mediaRouter);
   app.use('/api', notificationsRouter.router);
+  app.use('/api', searchRouter);
 
   app.get('/api/queues/health', (_req, res) => {
     void (async () => {

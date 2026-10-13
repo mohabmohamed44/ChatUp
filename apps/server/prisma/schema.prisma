@@ -103,7 +103,7 @@ model Message {
   pushAcks     PushAck[]
   editedAt     DateTime?
   deletedAt    DateTime?
-
+  searchVector Unsupported("tsvector")?
   @@unique([conversationId, senderId, clientId])
   @@index([conversationId, sequence(sort: Desc)])
   @@index([conversationId, createdAt])
