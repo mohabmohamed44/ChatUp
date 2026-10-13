@@ -21,11 +21,7 @@ const LABELS: Record<ClientMessageStatus, string> = {
   failed: 'Failed to send',
 };
 
-export function StatusIcon({
-  status,
-}: {
-  status: ClientMessageStatus;
-}) {
+export function StatusIcon({ status }: { status: ClientMessageStatus }) {
   const label = LABELS[status];
   const icon = (() => {
     switch (status) {

@@ -3,7 +3,7 @@ import { ApiError, apiFetch } from '../../shared/lib/api';
 
 export type UpdateAvatarInput = {
   avatarMediaId: string | null;
-}
+};
 
 export interface AuthResponse {
   user: AuthUser;

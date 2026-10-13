@@ -33,18 +33,10 @@ export default function ProfilePage() {
   const [user, setLocalUser] = useState<AuthUser | null>(cachedUser);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(
-    cachedUser?.avatarUrl ?? null,
-  );
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(cachedUser?.avatarUrl ?? null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const {
-    upload,
-    uploading,
-    progress,
-    error: uploadError,
-    reset: resetUpload,
-  } = useImageUpload();
+  const { upload, uploading, progress, error: uploadError, reset: resetUpload } = useImageUpload();
 
   // Fetch fresh profile from /auth/me on mount
   useEffect(() => {
@@ -88,7 +80,10 @@ export default function ProfilePage() {
     // Reject types the backend cannot store (magic-byte allowlist) before
     // uploading, so the user gets an instant message instead of a 400.
     if (!(LIMITS.IMAGE_ALLOWED_MIME as readonly string[]).includes(file.type)) {
-      toast.showToast('Please choose a JPEG, PNG, WebP or GIF image', { variant: 'warning', duration: 3000 });
+      toast.showToast('Please choose a JPEG, PNG, WebP or GIF image', {
+        variant: 'warning',
+        duration: 3000,
+      });
       return;
     }
 
@@ -114,7 +109,7 @@ export default function ProfilePage() {
       });
 
       setAvatarUrl(updated.avatarUrl ?? localPreview);
-      toast.showToast('Avatar updated', { variant: 'success' , duration: 3000});
+      toast.showToast('Avatar updated', { variant: 'success', duration: 3000 });
     } catch (err: unknown) {
       URL.revokeObjectURL(localPreview);
       setAvatarUrl(previousAvatarUrl);
@@ -176,11 +171,7 @@ export default function ProfilePage() {
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6">
           <div className="relative">
             {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt=""
-                className="h-24 w-24 rounded-full object-cover"
-              />
+              <img src={avatarUrl} alt="" className="h-24 w-24 rounded-full object-cover" />
             ) : (
               <span className="flex h-24 w-24 items-center justify-center rounded-full bg-indigo-100 text-3xl font-semibold text-indigo-700">
                 {initialsOf(user.displayName)}
@@ -230,18 +221,14 @@ export default function ProfilePage() {
             </p>
           ) : null}
 
-          <p className="text-lg font-semibold text-slate-900">
-            {user.displayName}
-          </p>
+          <p className="text-lg font-semibold text-slate-900">{user.displayName}</p>
         </div>
 
         {/* Email */}
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
           <Mail className="h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Email
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Email</p>
             <p className="truncate text-sm text-slate-700">{user.email}</p>
           </div>
         </div>

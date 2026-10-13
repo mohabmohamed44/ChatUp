@@ -1,20 +1,12 @@
 import { z } from 'zod';
 import { LIMITS } from '../constants';
 
-const email = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .pipe(z.email());
+const email = z.string().trim().toLowerCase().pipe(z.email());
 
 export const registerSchema = z.object({
   email,
   password: z.string().min(LIMITS.PASSWORD_MIN).max(LIMITS.PASSWORD_MAX),
-  displayName: z
-    .string()
-    .trim()
-    .min(LIMITS.DISPLAY_NAME_MIN)
-    .max(LIMITS.DISPLAY_NAME_MAX),
+  displayName: z.string().trim().min(LIMITS.DISPLAY_NAME_MIN).max(LIMITS.DISPLAY_NAME_MAX),
 });
 
 export const loginSchema = z.object({
@@ -29,8 +21,8 @@ export const updateProfileSchema = z.object({
     .min(LIMITS.DISPLAY_NAME_MIN)
     .max(LIMITS.DISPLAY_NAME_MAX)
     .optional(),
-    avatarMediaId: z.string().nullable().optional(),
-    fid: z.string().optional(),
+  avatarMediaId: z.string().nullable().optional(),
+  fid: z.string().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

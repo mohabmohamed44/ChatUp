@@ -1,8 +1,8 @@
 import type { Ack, Page } from './common';
 import type { ConversationSummary } from './conversations/types';
 import type {
-    DeleteMessagePayload,
-    EditMessagePayload,
+  DeleteMessagePayload,
+  EditMessagePayload,
   MarkPlayedPayload,
   Message,
   MessagePlayedUpdate,
@@ -42,18 +42,9 @@ export interface ClientToServerEvents {
   'message:sync': (payload: MessageSyncPayload, ack: (result: Ack<Page<Message>>) => void) => void;
   'typing:start': (payload: TypingStartPayload) => void;
   'presence:snapshot': (userIds: string[]) => void;
-  'message:edit': (
-  payload: EditMessagePayload,
-  ack: (result: Ack<Message>) => void,
-) => void;
-  'message:delete': (
-  payload: DeleteMessagePayload,
-  ack: (result: Ack<Message>) => void,
-) => void;
-  'message:played': (
-  payload: MarkPlayedPayload,
-  ack: (result: Ack<null>) => void,
-) => void;
+  'message:edit': (payload: EditMessagePayload, ack: (result: Ack<Message>) => void) => void;
+  'message:delete': (payload: DeleteMessagePayload, ack: (result: Ack<Message>) => void) => void;
+  'message:played': (payload: MarkPlayedPayload, ack: (result: Ack<null>) => void) => void;
 }
 
 export interface ServerToClientEvents {

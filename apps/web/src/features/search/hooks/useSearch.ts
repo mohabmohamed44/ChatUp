@@ -54,10 +54,7 @@ export function useSearch(params: {
     setLoading(true);
     setError(null);
 
-    const { after, before } = timeFilterToRange(
-      params.timeFilter,
-      params.custom,
-    );
+    const { after, before } = timeFilterToRange(params.timeFilter, params.custom);
 
     searchMessagesApi({
       q: debouncedQ,

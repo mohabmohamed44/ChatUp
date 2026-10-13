@@ -14,10 +14,7 @@ export async function toAuthUser(
 ): Promise<AuthUser> {
   let avatarUrl: string | null = null;
   if (user.avatarMediaId) {
-    avatarUrl = await storage.signedGetUrl(
-      `attachments/${user.avatarMediaId}`,
-      ttlSeconds,
-    );
+    avatarUrl = await storage.signedGetUrl(`attachments/${user.avatarMediaId}`, ttlSeconds);
   }
   return {
     id: user.id,
@@ -35,9 +32,7 @@ export class AuthService {
     private readonly storage: StorageService,
   ) {}
 
-  async register(
-    input: RegisterInput,
-  ): Promise<{ user: AuthUser; session: SessionBundle }> {
+  async register(input: RegisterInput): Promise<{ user: AuthUser; session: SessionBundle }> {
     const existing = await this.db.user.findUnique({
       where: { email: input.email },
     });
@@ -65,9 +60,7 @@ export class AuthService {
     };
   }
 
-  async login(
-    input: LoginInput,
-  ): Promise<{ user: AuthUser; session: SessionBundle }> {
+  async login(input: LoginInput): Promise<{ user: AuthUser; session: SessionBundle }> {
     const user = await this.db.user.findUnique({
       where: { email: input.email },
     });
@@ -94,11 +87,7 @@ export class AuthService {
       const media = await this.db.mediaAttachment.findUnique({
         where: { id: input.avatarMediaId },
       });
-      if (
-        !media ||
-        media.ownerId !== userId ||
-        media.status !== 'COMPLETED'
-      ) {
+      if (!media || media.ownerId !== userId || media.status !== 'COMPLETED') {
         throw Errors.badRequest('Avatar not found or not ready');
       }
     }
@@ -106,12 +95,8 @@ export class AuthService {
     const user = await this.db.user.update({
       where: { id: userId },
       data: {
-        ...(input.displayName !== undefined
-          ? { displayName: input.displayName }
-          : {}),
-        ...(input.avatarMediaId !== undefined
-          ? { avatarMediaId: input.avatarMediaId }
-          : {}),
+        ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+        ...(input.avatarMediaId !== undefined ? { avatarMediaId: input.avatarMediaId } : {}),
       },
     });
 

@@ -168,7 +168,12 @@ export interface ReadReceiptJob {
   upToMessageId?: string;
 }
 
-async function addOrThrow<T>(queue: Queue, name: string, data: T, opts: object = {}): Promise<Job<T>> {
+async function addOrThrow<T>(
+  queue: Queue,
+  name: string,
+  data: T,
+  opts: object = {},
+): Promise<Job<T>> {
   try {
     return await queue.add(name, data, opts);
   } catch (err) {
@@ -305,9 +310,8 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
       );
       // Offline fan-out: only recipients currently offline get a job.
       try {
-        const { ConversationsService } = await import(
-          '../modules/conversations/conversations.service'
-        );
+        const { ConversationsService } =
+          await import('../modules/conversations/conversations.service');
         const convSvc = new ConversationsService(deps.db, deps.storage, deps.config);
         const participantIds = await convSvc.participantIds(job.data.conversationId);
         const offline = participantIds.filter(
@@ -344,7 +348,11 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
         deps.logger,
       );
       if (job.data.type === 'delivered') {
-        await svc.markDelivered(job.data.conversationId, job.data.userId, job.data.messageIds ?? []);
+        await svc.markDelivered(
+          job.data.conversationId,
+          job.data.userId,
+          job.data.messageIds ?? [],
+        );
       } else {
         await svc.markRead(job.data.conversationId, job.data.userId, job.data.upToMessageId);
       }
@@ -563,10 +571,7 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
 
   queueEvents = new QueueEvents(QUEUES.MESSAGE_PERSISTENCE, { connection: makeRedis() });
   await scheduleRecurringJobs();
-  deps.logger.info(
-    { queues: all.map((w) => w.name) },
-    'BullMQ workers started',
-  );
+  deps.logger.info({ queues: all.map((w) => w.name) }, 'BullMQ workers started');
   return all;
 }
 
@@ -610,7 +615,10 @@ export async function queueHealth(): Promise<{
   queues: Record<string, { waiting: number; active: number; failed: number } | { error: string }>;
 }> {
   const redis = (await isRedisHealthy()) ? 'ok' : 'down';
-  const snapshot: Record<string, { waiting: number; active: number; failed: number } | { error: string }> = {};
+  const snapshot: Record<
+    string,
+    { waiting: number; active: number; failed: number } | { error: string }
+  > = {};
   for (const [name, q] of Object.entries(queues)) {
     try {
       const [waiting, active, failed] = await Promise.all([

@@ -38,7 +38,15 @@ function PushNotifications({ currentUserId }: { currentUserId: string }) {
 
   const handleForegroundMessage = useCallback(
     (payload: MessagePayload) => {
-      const toast = ({ title, body, conversationId }: { title: string; body?: string; conversationId?: string }) => {
+      const toast = ({
+        title,
+        body,
+        conversationId,
+      }: {
+        title: string;
+        body?: string;
+        conversationId?: string;
+      }) => {
         const message = body ? `${title}: ${body}` : title;
         showToast(message, {
           variant: 'info',
@@ -50,10 +58,9 @@ function PushNotifications({ currentUserId }: { currentUserId: string }) {
       void alertIncomingMessage({
         messageId: payload.data?.messageId,
         conversationId: payload.data?.conversationId,
-        title:
-          payload.data?.senderName?.trim()
-            ? `Message from: ${payload.data.senderName.trim()}`
-            : payload.notification?.title?.trim() || payload.data?.title?.trim() || 'New message',
+        title: payload.data?.senderName?.trim()
+          ? `Message from: ${payload.data.senderName.trim()}`
+          : payload.notification?.title?.trim() || payload.data?.title?.trim() || 'New message',
         body: payload.notification?.body?.trim() ?? payload.data?.body?.trim(),
         activeConversationId: viewingConversationId,
         showToast: toast,
@@ -87,16 +94,16 @@ function PushNotifications({ currentUserId }: { currentUserId: string }) {
       {supported && permission === 'denied' && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
           <p className="max-w-sm rounded-lg bg-slate-900 px-4 py-3 text-center text-xs text-white shadow-lg">
-            Notifications are blocked. Re-enable them in your browser or phone
-            settings to get new-message alerts.
+            Notifications are blocked. Re-enable them in your browser or phone settings to get
+            new-message alerts.
           </p>
         </div>
       )}
       {!supported && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
           <p className="max-w-sm rounded-lg bg-slate-900 px-4 py-3 text-center text-xs text-white shadow-lg">
-            On iPhone, tap Share, then Add to Home Screen, then open chatUp from
-            the Home Screen to enable notifications.
+            On iPhone, tap Share, then Add to Home Screen, then open chatUp from the Home Screen to
+            enable notifications.
           </p>
         </div>
       )}

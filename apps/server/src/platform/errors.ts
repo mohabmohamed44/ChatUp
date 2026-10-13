@@ -13,8 +13,7 @@ export class AppError extends Error {
 }
 
 export const Errors = {
-  unauthorized: (message = 'Authentication required') =>
-    new AppError('unauthorized', 401, message),
+  unauthorized: (message = 'Authentication required') => new AppError('unauthorized', 401, message),
   forbidden: (message = 'You do not have access to this resource') =>
     new AppError('forbidden', 403, message),
   notFound: (what = 'Resource') => new AppError('not_found', 404, `${what} not found`),

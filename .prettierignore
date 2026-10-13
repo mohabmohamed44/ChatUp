@@ -5,3 +5,6 @@ coverage
 package-lock.json
 apps/server/prisma/migrations
 apps/server/src/generated
+# No Prettier parser for Dockerfiles (would fail `format:check`)
+apps/server/Dockerfile
+apps/web/Dockerfile

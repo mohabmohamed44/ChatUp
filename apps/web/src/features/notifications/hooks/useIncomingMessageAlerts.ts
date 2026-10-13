@@ -8,7 +8,14 @@ import { alertIncomingMessage } from '../lib/alertIncomingMessage';
 interface UseIncomingMessageAlertsOptions {
   currentUserId: string | null | undefined;
   activeConversationId?: string | null;
-  showToast: (message: string, options?: { variant?: 'success' | 'error' | 'info' | 'warning'; duration?: number; onClick?: () => void }) => void;
+  showToast: (
+    message: string,
+    options?: {
+      variant?: 'success' | 'error' | 'info' | 'warning';
+      duration?: number;
+      onClick?: () => void;
+    },
+  ) => void;
   onOpenConversation?: (conversationId: string) => void;
 }
 

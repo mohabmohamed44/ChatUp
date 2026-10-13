@@ -1,6 +1,13 @@
 import cookie from 'cookie';
 import cors from 'cors';
-import express, { type Express, type NextFunction, type Request, type RequestHandler, type Response, type Router } from 'express';
+import express, {
+  type Express,
+  type NextFunction,
+  type Request,
+  type RequestHandler,
+  type Response,
+  type Router,
+} from 'express';
 import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
 import { pinoHttp } from 'pino-http';

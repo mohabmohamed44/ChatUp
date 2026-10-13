@@ -44,8 +44,8 @@ const cases = [
   '12345',
   'user@example.com',
   '192.168.1.1',
-  'hello.example',        // fake TLD
-  'not.a.domain.xyzabc',  // fake TLD
+  'hello.example', // fake TLD
+  'not.a.domain.xyzabc', // fake TLD
 ];
 
 export default function LinkifyTestPage() {

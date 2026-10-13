@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { ConversationSummary, PresenceStatus } from '@chatup/shared';
 import { formatListTimestamp, initialsOf, formatFullTimestamp } from '@/shared/lib/format';
-import { useLocale } from "@/shared/providers/LocaleProvider";
+import { useLocale } from '@/shared/providers/LocaleProvider';
 import { cn } from '@/shared/lib/utils';
 
 export function ConversationItem({
@@ -24,9 +24,9 @@ export function ConversationItem({
   const preview = lastMessage
     ? `${lastMessage.senderId === currentUserId ? 'You: ' : ''}${lastMessage.preview}`
     : 'No messages yet';
-  
+
   const { locale } = useLocale();
-  
+
   return (
     <li>
       <Link
@@ -39,11 +39,7 @@ export function ConversationItem({
       >
         <span className="relative shrink-0">
           {other?.avatarUrl ? (
-            <img
-              src={other.avatarUrl}
-              alt=""
-              className="h-11 w-11 rounded-full object-cover"
-            />
+            <img src={other.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover" />
           ) : (
             <span
               className={cn(

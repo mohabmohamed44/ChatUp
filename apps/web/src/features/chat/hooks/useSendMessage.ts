@@ -19,9 +19,7 @@ export type SendInput =
   | { kind: 'image'; attachmentId: string; localPreviewUrl?: string }
   | { kind: 'audio'; attachmentId: string; durationMs: number };
 
-type Ack =
-  | { ok: true; data: Message }
-  | { ok: false; error: { code: string; message: string } };
+type Ack = { ok: true; data: Message } | { ok: false; error: { code: string; message: string } };
 
 /**
  * Builds a placeholder Attachment for the optimistic message so the image
@@ -47,11 +45,7 @@ function toOptimisticAttachment(input: SendInput): Attachment | null {
 /**
  * Maps the client-side input to the exact socket payload the backend expects.
  */
-function toPayload(
-  input: SendInput,
-  conversationId: string,
-  clientId: string,
-): SendMessagePayload {
+function toPayload(input: SendInput, conversationId: string, clientId: string): SendMessagePayload {
   if (input.kind === 'text') {
     return { conversationId, clientId, kind: 'text', body: input.body };
   }

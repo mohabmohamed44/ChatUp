@@ -61,93 +61,96 @@ export const isRedisAvailable = () => redis !== undefined;
 
 /** Use inside integration tests that truly need Postgres. */
 export function requirePrisma(): PrismaClient {
-    if (!prisma) throw new Error('Postgres is not available (DATABASE_URL unset or unreachable)');
-    return prisma;
+  if (!prisma) throw new Error('Postgres is not available (DATABASE_URL unset or unreachable)');
+  return prisma;
 }
 
 /** Use inside integration tests that truly need Redis. */
 export function requireRedis(): Redis {
-    if (!redis) throw new Error('Redis is not available (REDIS_URL unset or unreachable)');
-    return redis;
+  if (!redis) throw new Error('Redis is not available (REDIS_URL unset or unreachable)');
+  return redis;
 }
 
 let warned = false;
 function warnOnce(message: string, err: unknown) {
-    if (warned) return;
-    warned = true;
-    console.warn(`[test-setup] ${message} — DB-backed cleanup disabled.`, err instanceof Error ? err.message : err);
+  if (warned) return;
+  warned = true;
+  console.warn(
+    `[test-setup] ${message} — DB-backed cleanup disabled.`,
+    err instanceof Error ? err.message : err,
+  );
 }
 
 beforeAll(async () => {
-    // Postgres — only the dedicated test database.
-    try {
-        const url = process.env.DATABASE_URL;
-        if (!url) throw new Error('DATABASE_URL is not set');
-        if (!isTestDatabase(url)) {
-            throw new Error(`Refusing to connect to non-test database "${databaseName(url)}"`);
-        }
-        const client = new PrismaClient({
-            adapter: new PrismaPg({ connectionString: url }),
-        });
-        await client.$connect();
-        prisma = client;
-    } catch (err) {
-        await prisma?.$disconnect().catch(() => {});
-        prisma = undefined;
-        warnOnce('Postgres unavailable', err);
+  // Postgres — only the dedicated test database.
+  try {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error('DATABASE_URL is not set');
+    if (!isTestDatabase(url)) {
+      throw new Error(`Refusing to connect to non-test database "${databaseName(url)}"`);
     }
+    const client = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: url }),
+    });
+    await client.$connect();
+    prisma = client;
+  } catch (err) {
+    await prisma?.$disconnect().catch(() => {});
+    prisma = undefined;
+    warnOnce('Postgres unavailable', err);
+  }
 
-    // Redis db 15 so flushdb cannot wipe the dev queue / socket adapter on db 0.
-    let client: Redis | undefined;
-    try {
-        const url = process.env.REDIS_URL;
-        if (!url) throw new Error('REDIS_URL is not set');
-        client = new Redis(url, {
-            db: 15,
-            lazyConnect: true,
-            enableOfflineQueue: false,
-            enableReadyCheck: false,
-            maxRetriesPerRequest: 1,
-            connectTimeout: 3_000,
-            retryStrategy: () => null,
-        });
-        await client.ping();
-        redis = client;
-    } catch (err) {
-        client?.disconnect();
-        redis = undefined;
-        warnOnce('Redis unavailable', err);
-    }
+  // Redis db 15 so flushdb cannot wipe the dev queue / socket adapter on db 0.
+  let client: Redis | undefined;
+  try {
+    const url = process.env.REDIS_URL;
+    if (!url) throw new Error('REDIS_URL is not set');
+    client = new Redis(url, {
+      db: 15,
+      lazyConnect: true,
+      enableOfflineQueue: false,
+      enableReadyCheck: false,
+      maxRetriesPerRequest: 1,
+      connectTimeout: 3_000,
+      retryStrategy: () => null,
+    });
+    await client.ping();
+    redis = client;
+  } catch (err) {
+    client?.disconnect();
+    redis = undefined;
+    warnOnce('Redis unavailable', err);
+  }
 });
 
 afterAll(async () => {
-    await prisma?.$disconnect().catch(() => {});
-    redis?.disconnect();
-    prisma = undefined;
-    redis = undefined;
+  await prisma?.$disconnect().catch(() => {});
+  redis?.disconnect();
+  prisma = undefined;
+  redis = undefined;
 });
 
 beforeEach(async () => {
-    // Order matters — respect FKs. Skipped when Postgres is down (unit tests).
-    const url = process.env.DATABASE_URL;
-    if (prisma && url && isTestDatabase(url)) {
-        try {
-            await prisma.$executeRawUnsafe(`
+  // Order matters — respect FKs. Skipped when Postgres is down (unit tests).
+  const url = process.env.DATABASE_URL;
+  if (prisma && url && isTestDatabase(url)) {
+    try {
+      await prisma.$executeRawUnsafe(`
                 TRUNCATE TABLE
                     "MessageReceipt", "Message", "MediaAttachment",
                     "ConversationParticipant", "Conversation",
                     "Session", "User"
                 RESTART IDENTITY CASCADE;
             `);
-        } catch (err) {
-            warnOnce('DB truncate failed', err);
-        }
+    } catch (err) {
+      warnOnce('DB truncate failed', err);
     }
-    if (redis) {
-        try {
-            await redis.flushdb();
-        } catch (err) {
-            warnOnce('Redis flushdb failed', err);
-        }
+  }
+  if (redis) {
+    try {
+      await redis.flushdb();
+    } catch (err) {
+      warnOnce('Redis flushdb failed', err);
     }
+  }
 });

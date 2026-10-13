@@ -1,9 +1,5 @@
 import { Router } from 'express';
-import {
-  CONVERSATION_EVENTS,
-  SOCKET_ROOMS,
-  startConversationSchema,
-} from '@chatup/shared';
+import { CONVERSATION_EVENTS, SOCKET_ROOMS, startConversationSchema } from '@chatup/shared';
 import type { Db } from '../../platform/db';
 import type { AppConfig } from '../../platform/config';
 import type { StorageService } from '../../platform/storage';

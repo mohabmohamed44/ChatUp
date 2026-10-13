@@ -18,11 +18,7 @@ function formatDuration(ms: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function VoiceRecorder({
-  conversationId,
-  onRecorded,
-  disabled = false,
-}: Props) {
+export function VoiceRecorder({ conversationId, onRecorded, disabled = false }: Props) {
   const {
     state,
     isPaused,
@@ -38,12 +34,7 @@ export function VoiceRecorder({
     discardDraft,
   } = useVoiceRecorder(conversationId);
 
-  const {
-    uploadAudio,
-    uploading,
-    progress,
-    error: uploadError,
-  } = useImageUpload();
+  const { uploadAudio, uploading, progress, error: uploadError } = useImageUpload();
 
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -61,11 +52,7 @@ export function VoiceRecorder({
       return;
     }
 
-    onRecorded(
-      result.attachmentId,
-      Math.round(recording.durationMs),
-      recording.previewUrl,
-    );
+    onRecorded(result.attachmentId, Math.round(recording.durationMs), recording.previewUrl);
     // reset() also clears the persisted IndexedDB draft.
     reset();
   }
@@ -98,12 +85,8 @@ export function VoiceRecorder({
           className={`h-3 w-3 rounded-full ${isPaused ? 'bg-amber-500' : 'animate-pulse bg-red-500'}`}
           aria-hidden="true"
         />
-        <span className="font-mono text-sm tabular-nums">
-          {formatDuration(elapsedMs)}
-        </span>
-        <span className="text-xs text-slate-500">
-          {isPaused ? 'Paused' : 'Recording…'}
-        </span>
+        <span className="font-mono text-sm tabular-nums">{formatDuration(elapsedMs)}</span>
+        <span className="text-xs text-slate-500">{isPaused ? 'Paused' : 'Recording…'}</span>
         <div className="flex-1" />
         {error && (
           <span className="hidden text-xs text-red-600 sm:block" role="alert">
@@ -146,11 +129,7 @@ export function VoiceRecorder({
   // Preview state
   return (
     <div className="absolute inset-x-3 bottom-3 z-40 flex min-w-0 items-center gap-2 rounded-full bg-white px-3 py-2 shadow-lg ring-1 ring-slate-200 sm:gap-3 sm:px-4">
-      <audio
-        src={recording?.previewUrl}
-        controls
-        className="h-8 min-w-0 flex-1"
-      />
+      <audio src={recording?.previewUrl} controls className="h-8 min-w-0 flex-1" />
       <button
         type="button"
         onClick={() => void discardDraft()}

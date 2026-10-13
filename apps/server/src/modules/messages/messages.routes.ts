@@ -112,132 +112,114 @@ export function registerMessageSocketEvents(deps: {
   io.on('connection', (socket) => {
     const userId = socket.data.userId;
 
-    socket.on(
-      MESSAGE_EVENTS.send,
-      async (payload, ack: (result: Ack<Message>) => void) => {
-        try {
-          const message = await sendViaQueueOrDirect(service, logger, payload, userId);
-          ack?.({ ok: true, data: message });
-        } catch (err) {
-          logger.warn({ err, userId }, 'message:send failed');
-          ack?.({
-            ok: false,
-            error: {
-              code: err instanceof Error && 'code' in err ? String(err.code) : 'send_failed',
-              message: err instanceof Error ? err.message : 'Failed to send message',
-            },
-          });
-        }
-      },
-    );
+    socket.on(MESSAGE_EVENTS.send, async (payload, ack: (result: Ack<Message>) => void) => {
+      try {
+        const message = await sendViaQueueOrDirect(service, logger, payload, userId);
+        ack?.({ ok: true, data: message });
+      } catch (err) {
+        logger.warn({ err, userId }, 'message:send failed');
+        ack?.({
+          ok: false,
+          error: {
+            code: err instanceof Error && 'code' in err ? String(err.code) : 'send_failed',
+            message: err instanceof Error ? err.message : 'Failed to send message',
+          },
+        });
+      }
+    });
 
-    socket.on(
-      MESSAGE_EVENTS.read,
-      async (payload, ack: (result: Ack<null>) => void) => {
+    socket.on(MESSAGE_EVENTS.read, async (payload, ack: (result: Ack<null>) => void) => {
+      try {
+        // Async receipts: enqueue for the worker, fall back to direct write
+        // when Redis is down so read states never stall.
         try {
-          // Async receipts: enqueue for the worker, fall back to direct write
-          // when Redis is down so read states never stall.
-          try {
-            await enqueueReadReceipt({
-              type: 'read',
-              conversationId: payload.conversationId,
-              userId,
-              upToMessageId: payload.upToMessageId,
-            });
-          } catch {
-            await service.markRead(payload.conversationId, userId, payload.upToMessageId);
-          }
-          ack?.({ ok: true, data: null });
-        } catch (err) {
-          logger.warn({ err, userId }, 'message:read failed');
-          ack?.({
-            ok: false,
-            error: { code: 'read_failed', message: 'Failed to mark messages as read' },
-          });
-        }
-      },
-    );
-
-    socket.on(
-      MESSAGE_EVENTS.sync,
-      async (payload, ack: (result: Ack<Page<Message>>) => void) => {
-        try {
-          const page = await service.sync(
-            payload.conversationId,
+          await enqueueReadReceipt({
+            type: 'read',
+            conversationId: payload.conversationId,
             userId,
-            payload.afterSequence ?? null,
-            payload.limit ?? 50,
-          );
-          ack?.({ ok: true, data: page });
-        } catch (err) {
-          logger.warn({ err, userId }, 'message:sync failed');
-          ack?.({
-            ok: false,
-            error: { code: 'sync_failed', message: 'Failed to sync messages' },
+            upToMessageId: payload.upToMessageId,
           });
+        } catch {
+          await service.markRead(payload.conversationId, userId, payload.upToMessageId);
         }
-      },
-    );
+        ack?.({ ok: true, data: null });
+      } catch (err) {
+        logger.warn({ err, userId }, 'message:read failed');
+        ack?.({
+          ok: false,
+          error: { code: 'read_failed', message: 'Failed to mark messages as read' },
+        });
+      }
+    });
 
-    socket.on(
-      MESSAGE_EVENTS.edit,
-      async (payload, ack: (result: Ack<Message>) => void) => {
-        try {
-          const input = editMessageSchema.parse(payload);
-          const message = await service.editMessage(input.messageId, userId, input.body);
-          ack?.({ ok: true, data: message });
-        } catch (err) {
-          logger.warn({ err, userId }, 'message:edit failed');
-          ack?.({
-            ok: false,
-            error: {
-              code: err instanceof Error && 'code' in err ? String(err.code) : 'edit_failed',
-              message: err instanceof Error ? err.message : 'Failed to edit message',
-            },
-          });
-        }
-      },
-    );
+    socket.on(MESSAGE_EVENTS.sync, async (payload, ack: (result: Ack<Page<Message>>) => void) => {
+      try {
+        const page = await service.sync(
+          payload.conversationId,
+          userId,
+          payload.afterSequence ?? null,
+          payload.limit ?? 50,
+        );
+        ack?.({ ok: true, data: page });
+      } catch (err) {
+        logger.warn({ err, userId }, 'message:sync failed');
+        ack?.({
+          ok: false,
+          error: { code: 'sync_failed', message: 'Failed to sync messages' },
+        });
+      }
+    });
 
-    socket.on(
-      MESSAGE_EVENTS.delete,
-      async (payload, ack: (result: Ack<Message>) => void) => {
-        try {
-          const input = deleteMessageSchema.parse(payload);
-          const message = await service.deleteMessage(input.messageId, userId);
-          ack?.({ ok: true, data: message });
-        } catch (err) {
-          logger.warn({ err, userId }, 'message:delete failed');
-          ack?.({
-            ok: false,
-            error: {
-              code: err instanceof Error && 'code' in err ? String(err.code) : 'delete_failed',
-              message: err instanceof Error ? err.message : 'Failed to delete message',
-            },
-          });
-        }
-      },
-    );
+    socket.on(MESSAGE_EVENTS.edit, async (payload, ack: (result: Ack<Message>) => void) => {
+      try {
+        const input = editMessageSchema.parse(payload);
+        const message = await service.editMessage(input.messageId, userId, input.body);
+        ack?.({ ok: true, data: message });
+      } catch (err) {
+        logger.warn({ err, userId }, 'message:edit failed');
+        ack?.({
+          ok: false,
+          error: {
+            code: err instanceof Error && 'code' in err ? String(err.code) : 'edit_failed',
+            message: err instanceof Error ? err.message : 'Failed to edit message',
+          },
+        });
+      }
+    });
 
-    socket.on(
-      MESSAGE_EVENTS.played,
-      async (payload, ack: (result: Ack<null>) => void) => {
-        try {
-          const input = markPlayedSchema.parse(payload);
-          await service.markPlayed(input.conversationId, userId, input.messageId);
-          ack?.({ ok: true, data: null });
-        } catch (err) {
-          logger.warn({ err, userId }, 'message:played failed');
-          ack?.({
-            ok: false,
-            error: {
-              code: 'played_failed',
-              message: err instanceof Error ? err.message : 'Failed to mark as played',
-            },
-          });
-        }
-      },
-    );
+    socket.on(MESSAGE_EVENTS.delete, async (payload, ack: (result: Ack<Message>) => void) => {
+      try {
+        const input = deleteMessageSchema.parse(payload);
+        const message = await service.deleteMessage(input.messageId, userId);
+        ack?.({ ok: true, data: message });
+      } catch (err) {
+        logger.warn({ err, userId }, 'message:delete failed');
+        ack?.({
+          ok: false,
+          error: {
+            code: err instanceof Error && 'code' in err ? String(err.code) : 'delete_failed',
+            message: err instanceof Error ? err.message : 'Failed to delete message',
+          },
+        });
+      }
+    });
+
+    socket.on(MESSAGE_EVENTS.played, async (payload, ack: (result: Ack<null>) => void) => {
+      try {
+        const input = markPlayedSchema.parse(payload);
+        await service.markPlayed(input.conversationId, userId, input.messageId);
+        ack?.({ ok: true, data: null });
+      } catch (err) {
+        logger.warn({ err, userId }, 'message:played failed');
+        ack?.({
+          ok: false,
+          error: {
+            code: 'played_failed',
+            message: err instanceof Error ? err.message : 'Failed to mark as played',
+          },
+        });
+      }
+    });
 
     socket.on(MESSAGE_EVENTS.new, (payload, ack?: () => void) => {
       void (async () => {
@@ -254,11 +236,9 @@ export function registerMessageSocketEvents(deps: {
               messageIds: [payload.message.id],
             });
           } catch {
-            await service.markDelivered(
-              payload.message.conversationId,
-              userId,
-              [payload.message.id],
-            );
+            await service.markDelivered(payload.message.conversationId, userId, [
+              payload.message.id,
+            ]);
           }
           ack?.();
         } catch {

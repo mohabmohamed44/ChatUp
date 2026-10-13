@@ -73,20 +73,12 @@ export default function SearchPage() {
           </p>
         )}
 
-        {loading && (
-          <p className="mt-12 text-center text-sm text-slate-500">
-            Searching…
-          </p>
-        )}
+        {loading && <p className="mt-12 text-center text-sm text-slate-500">Searching…</p>}
 
-        {error && (
-          <p className="mt-12 text-center text-sm text-red-600">{error}</p>
-        )}
+        {error && <p className="mt-12 text-center text-sm text-red-600">{error}</p>}
 
         {!loading && !error && q.length >= 2 && results.length === 0 && (
-          <p className="mt-12 text-center text-sm text-slate-500">
-            No results.
-          </p>
+          <p className="mt-12 text-center text-sm text-slate-500">No results.</p>
         )}
 
         <ul className="space-y-2">
@@ -94,17 +86,13 @@ export default function SearchPage() {
             <li key={r.id}>
               <button
                 onClick={() =>
-                  router.push(
-                    `/conversations/${r.conversationId}?jumpTo=${r.sequence}`,
-                  )
+                  router.push(`/conversations/${r.conversationId}?jumpTo=${r.sequence}`)
                 }
                 className="w-full rounded-lg border border-slate-200 bg-white p-3 text-start transition hover:border-slate-300 hover:bg-slate-50"
               >
                 <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
-                  <span className="font-medium text-slate-700">
-                    {r.senderName}
-                  </span>
-                  <span>{formatListTimestamp((r.createdAt), 'en')}</span>
+                  <span className="font-medium text-slate-700">{r.senderName}</span>
+                  <span>{formatListTimestamp(r.createdAt, 'en')}</span>
                 </div>
                 <p className="text-sm text-slate-800">
                   <HighlightedSnippet html={r.snippet} />

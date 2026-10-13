@@ -114,7 +114,13 @@ export class FcmService {
       messaging = getMessaging(app);
     } catch (err) {
       this.logger.error({ err }, 'FCM initialization failed; push NOT sent');
-      return { attempted, succeeded: 0, failed: 0, invalidTargets: [], skippedReason: 'init-failed' };
+      return {
+        attempted,
+        succeeded: 0,
+        failed: 0,
+        invalidTargets: [],
+        skippedReason: 'init-failed',
+      };
     }
 
     if (this.cfg.FCM_DRY_RUN) {
@@ -132,9 +138,7 @@ export class FcmService {
       ...(input.notification ? { notification: input.notification } : {}),
       ...(input.data
         ? {
-            data: Object.fromEntries(
-              Object.entries(input.data).map(([k, v]) => [k, String(v)]),
-            ),
+            data: Object.fromEntries(Object.entries(input.data).map(([k, v]) => [k, String(v)])),
           }
         : {}),
       webpush: {
@@ -144,7 +148,7 @@ export class FcmService {
           : {}),
         fcmOptions: {
           analyticsLabel: 'chatup_web_push',
-        }
+        },
       },
     } as FidMulticastMessage;
 

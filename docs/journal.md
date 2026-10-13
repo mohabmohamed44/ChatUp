@@ -9,20 +9,20 @@
 - Symptom: `Cannot find module '@prisma/client/runtime/library.js'`
 - Cause: Prisma 7 changed the client output model and requires a driver adapter.
 - Fix: Installed `@prisma/adapter-pg`, initialized `PrismaClient` with the adapter,
-set a custom output path in `schema.prisma`, and updated all imports to the
-generated path.
+  set a custom output path in `schema.prisma`, and updated all imports to the
+  generated path.
 - Files: `apps/server/prisma/schema.prisma`, `apps/server/src/platform/db.ts`,
-`apps/server/prisma.config.ts`
+  `apps/server/prisma.config.ts`
 
 **2. Session cookie removed in DevTools did not auto-redirect**
 
 - Symptom: deleting the cookie left the user on a protected page until refresh.
 - Cause: React state does not know the cookie disappeared. Nothing triggers a
-re-fetch until the next API call.
+  re-fetch until the next API call.
 - Fix: added a global 401 handler. `apiFetch` dispatches `chatup:unauthorized`;
-`AuthProvider` listens, clears the user, and the protected layout redirects.
+  `AuthProvider` listens, clears the user, and the protected layout redirects.
 - Files: `apps/web/src/shared/lib/api.ts`,
-`apps/web/src/shared/providers/AuthProvider.tsx`
+  `apps/web/src/shared/providers/AuthProvider.tsx`
 
 **3. Inline** `tsx -e` **with** `!` **broke in bash**
 
@@ -30,17 +30,13 @@ re-fetch until the next API call.
 - Cause: bash treats `!` as history expansion.
 - Fix: use single quotes around the inline script and double quotes inside it.
 
-
-
 ### Decisions made
 
 - Chose React Context for auth state; deferred TanStack Query to Phase 3 for
-conversations and messages.
+  conversations and messages.
 - Kept the feature-based folder structure for the frontend.
 - Used shared Zod schemas in `packages/shared` so client and server validate
-with the same rules.
-
-
+  with the same rules.
 
 ### Next
 
@@ -48,11 +44,7 @@ with the same rules.
 - `conversation:subscribe` event
 - Text messaging vertical slice
 
-
-
 ## 2026-09-17 — Socket authentication complete
-
-
 
 ### Verified
 
@@ -63,8 +55,6 @@ with the same rules.
 - 401 on /auth/me handled gracefully
 - Added Auth Endpoints to Postman With Documentation and Example
 
-
-
 ### Discovered
 
 - Backend messages module is fully implemented:
@@ -74,18 +64,12 @@ with the same rules.
   - History pagination and missed-message recovery
   - Conversation update broadcasts
 
-
-
 ### Next
 
 - Build frontend chat UI (features/chat, features/conversations)
 - Two-user real-time test
 
-
-
 ## 2026-09-18 — Phase 3 complete
-
-
 
 ### Built
 
@@ -93,14 +77,10 @@ with the same rules.
 - Pages: `(app)/conversations/page.tsx`, `(app)/conversations/[id]/page.tsx`
 - Socket client singleton wired into AuthProvider
 
-
-
 ### Test scripts
 
 - `scripts/test-idempotency.ts` — same clientId twice, asserts one row
 - `scripts/seed-messages.ts` — seeds N messages via socket
-
-
 
 ### Verified
 
@@ -113,8 +93,6 @@ with the same rules.
 - Pagination: 51 messages loaded as 30 + 21, no gaps — PASS
 - Reconnect sync: `message:sync` recovered missed messages — PASS
 
-
-
 ### Fixed
 
 - **Pagination cursor was a UUID.** `id: { lt: BigInt(before) }` compared a UUID column to a number, returning nothing.
@@ -123,20 +101,14 @@ with the same rules.
   - Schema: `before: z.uuid()` → `z.string().regex(/^\d+$/)`
   - Verified: 51 messages loaded cleanly across two pages
 
-
-
 ### Closed
 
 - **Self-receipts** — not reproducible. Re-seeded 40 messages, diagnostic query returned 0 receipts. Earlier observation was likely a stale dev server.
-
-
 
 ### Discovered
 
 - Prisma 7 moved seed config from `package.json` to `prisma.config.ts`
 - Seed command is now `migrations.seed: 'tsx prisma/seed.ts'`
-
-
 
 ### Coverage vs. brief
 
@@ -146,17 +118,11 @@ with the same rules.
 - Section 12 — Presence, typing, status ✅
 - Section 13 — Data model and API ✅ (written API docs deferred to Phase 5)
 
-
-
 ### Next
 
 - Phase 4: image upload and voice messages
 
-
-
 ## 2026-09-20 — Image upload complete
-
-
 
 ### Built
 
@@ -184,8 +150,6 @@ with the same rules.
 - `MessageBubble.tsx` — dispatches on `message.kind`
 - `useSendMessage.ts` — accepts `SendInput` union (text, image, audio)
 
-
-
 ### Verified
 
 **Backend (curl)**
@@ -209,38 +173,28 @@ with the same rules.
 - Multiple images in a row → all render, no duplicates
 - Mobile viewport → layout intact
 
-
-
 ### Fixed
 
 - `useImageUpload.ts` was missing the `/api` prefix → 404 on upload.
-Corrected to `POST /api/media/${kind}`.
+  Corrected to `POST /api/media/${kind}`.
 - `ImagePicker` `onUploaded` signature — aligned to pass both
-`attachmentId` and `localPreviewUrl` so the optimistic bubble can
-render the local preview immediately.
-
-
+  `attachmentId` and `localPreviewUrl` so the optimistic bubble can
+  render the local preview immediately.
 
 ### Notes
 
 - Local uploads are near-instant (<300 ms for 2 MB).
 - Upload approach is direct multipart (multer → server → storage.put),
-not signed PUT URLs. Simpler and already implemented.
+  not signed PUT URLs. Simpler and already implemented.
 - Signed URL TTL is 900 s. Regenerated on each message fetch.
 - Local dev uses `fake-gcs-server` on port 4443.
-
-
 
 ### Next
 
 - Voice messages: MediaRecorder, preview, playback
 - Then merge `feature/media-images` to `main`
 
-
-
 ## 2026-09-22 — Voice messages complete
-
-
 
 ### Built
 
@@ -248,8 +202,6 @@ not signed PUT URLs. Simpler and already implemented.
 - `VoiceRecorder.tsx` — idle / recording / preview states
 - `VoiceMessage.tsx` — playback with countdown timer and progress bar
 - Wired into MessageComposer and MessageBubble
-
-
 
 ### Verified
 
@@ -260,16 +212,12 @@ not signed PUT URLs. Simpler and already implemented.
 - Mic denial → clear error message
 - Cancel mid-recording → no message, stream released
 
-
-
 ### Fixed
 
 - Timer was showing total duration, not remaining. Now tracks
-`currentMs` via `onTimeUpdate` and displays `remainingMs` while playing.
+  `currentMs` via `onTimeUpdate` and displays `remainingMs` while playing.
 - Progress bar used `bg-white/20` on a white bubble — invisible.
-Now colors depend on `isOwn`.
-
-
+  Now colors depend on `isOwn`.
 
 ### Notes
 
@@ -277,11 +225,7 @@ Now colors depend on `isOwn`.
 - Backend already accepts both via magic-byte detection
 - Max recording: 120s (enforced client + server)
 
-
-
 ## 2026-09-26 — Read more, clickable links, network banner
-
-
 
 ### Built
 
@@ -331,16 +275,12 @@ Now colors depend on `isOwn`.
 - Semantic `<main>` element for the content area
 - `bg-slate-50` background for the app shell
 
-
-
 ### Fixed
 
 - `linkify-it` **import** — was `import { LinkifyIt }` (named), should be `import LinkifyIt` (default). Named import was `undefined` at runtime.
 - **Scheme removal** — `linkify.add('ftp:', null)` adds with a null definition instead of removing. Correct call is `linkify.add('ftp:')` with no second argument.
 - `ARABIC_RE` **escapes** — regex was corrupted with literal Arabic characters instead of `\uXXXX` escape sequences. Restored proper escapes for Hebrew, Arabic, Persian, Urdu ranges.
 - **Fuzzy email and IP detection** — disabled `fuzzyEmail` and `fuzzyIP` to prevent false positives (`user@example.com`, `192.168.1.1`).
-
-
 
 ### Verified
 
@@ -382,8 +322,6 @@ Now colors depend on `isOwn`.
 - Mixed Arabic + Latin: each script renders with correct direction and glyphs
 - Numbers and emoji are neutral, do not affect base direction
 
-
-
 ### Known limitations
 
 - Rich link previews (WhatsApp-style cards) not implemented. Would need a backend endpoint with SSRF protection.
@@ -391,16 +329,12 @@ Now colors depend on `isOwn`.
 - Bare IP addresses like `192.168.1.1` are not clickable (fuzzyIP disabled).
 - Multi-line BiDi is handled per paragraph, but very complex mixed content could still have edge cases.
 
-
-
 ### Notes
 
 - `linkify-it` is what Slack and Discord use. Well-tested and maintained.
 - Truncation uses `Intl.Segmenter` for grapheme clustering. Supported in all modern browsers.
 - The banner debounce is 1.5 seconds. Brief WiFi blips will not show the banner.
 - The `dir` attribute is computed per message, not per app. Arabic users can still see English messages with correct LTR rendering.
-
-
 
 ### Next
 
@@ -410,11 +344,7 @@ Now colors depend on `isOwn`.
 - PWA + FCM for push notifications
 - Message queues for async work (only when needed)
 
-
-
 ## 2026-09-28 — Design documentation
-
-
 
 ### Built
 
@@ -467,16 +397,12 @@ Now colors depend on `isOwn`.
 - Service names and ports labeled
 - One network, service-name DNS
 
-
-
 ### Fixed
 
 - `Auth (Argon2)` → `Auth (scrypt)` in the architecture diagrams.
-The code uses scrypt (N=16384, r=8, p=1), not Argon2.
+  The code uses scrypt (N=16384, r=8, p=1), not Argon2.
 - Cardinality labels on `Message ↔ MediaAttachment` (0..1 : 1) and
-`Message ↔ ConversationParticipant` (Many : 0..1) corrected.
-
-
+  `Message ↔ ConversationParticipant` (Many : 0..1) corrected.
 
 ### Verified
 
@@ -487,16 +413,12 @@ The code uses scrypt (N=16384, r=8, p=1), not Argon2.
 - Modular monolith structure matches `apps/` and `packages/` layout
 - GCP topology uses only services in the planned deployment
 
-
-
 ### Notes
 
 - Diagrams stored in `docs/diagrams/` with both `.drawio` sources and `.png` exports
 - Eraser.io used to generate the initial drafts, then refined in draw.io
 - PDFs merged into a single file for delivery to Mr. Mohammed
 - Source files committed so the diagrams can be edited later
-
-
 
 ### Next
 
@@ -505,11 +427,7 @@ The code uses scrypt (N=16384, r=8, p=1), not Argon2.
 - Local cache with IndexedDB
 - PWA + FCM
 
-
-
 ## 2026-09-30 — Transactions, RTL, timestamps, Docker
-
-
 
 ### Fixed
 
@@ -519,28 +437,26 @@ The code uses scrypt (N=16384, r=8, p=1), not Argon2.
 - `media upload` — attachment create + storageKey update atomic
 - `messages.send` — insert, conversation pointer, receipts atomic
 - `messages.markDelivered` — receipt upserts in one transaction with a
-shared timestamp
+  shared timestamp
 - `messages.markRead` — read markers and participant pointer atomic
 - Idempotency: replaced find-then-create with try/catch on P2002.
-Concurrent retries with the same clientId now resolve to the winner
-row instead of racing.
+  Concurrent retries with the same clientId now resolve to the winner
+  row instead of racing.
 
 **Presence grace period**
 
 - `LIMITS.PRESENCE_GRACE_MS`: 30_000 → 3_000
 - Offline updates now reach partners in real time instead of requiring
-a page refresh. 3s rides out a page refresh but still delivers
-offline for genuine disconnects.
+  a page refresh. 3s rides out a page refresh but still delivers
+  offline for genuine disconnects.
 
 **Docker**
 
 - Docker Desktop context override caused `docker` CLI to look at
-`~/.docker/desktop/docker.sock` instead of `/var/run/docker.sock`.
-Switched back to `default` context.
+  `~/.docker/desktop/docker.sock` instead of `/var/run/docker.sock`.
+  Switched back to `default` context.
 - Zombie `docker-pr` processes held ports 5432, 6379, and 4443 after
-daemon restarts. Freed with `fuser -k`.
-
-
+  daemon restarts. Freed with `fuser -k`.
 
 ### Added
 
@@ -549,7 +465,7 @@ daemon restarts. Freed with `fuser -k`.
 - `LocaleProvider` sets `dir` and `lang` on `<html>`
 - Language toggle in the conversation list header
 - Physical CSS replaced with logical properties across components
-(`left-` → `start-`, `pl-` → `ps-`, etc.)
+  (`left-` → `start-`, `pl-` → `ps-`, etc.)
 - Directional icons rotate with `rtl:rotate-180` (ArrowLeft, SendHorizontal)
 - Placeholder alignment follows UI direction
 
@@ -557,15 +473,13 @@ daemon restarts. Freed with `fuser -k`.
 
 - Single source of truth in `apps/web/src/shared/lib/format.ts`
 - Three functions: `formatListTimestamp`, `formatBubbleTimestamp`,
-`formatFullTimestamp`
+  `formatFullTimestamp`
 - List: Now → 5m → 10:35 AM → Yesterday → Mon → Sep 24
 - Bubble: 10:35 AM → Yesterday 10:35 AM → Mon 10:35 AM → Sep 24
 - Full: Thursday, September 24, 2026 at 10:35 AM
 - Arabic localization via `Intl` with `ar-EG-u-nu-latn` (Western digits)
 - Formatters cached per locale to avoid re-construction on render
 - `formatMessageTime` kept as backwards-compatible alias
-
-
 
 ### Verified
 
@@ -576,18 +490,12 @@ daemon restarts. Freed with `fuser -k`.
 - Alice refreshes → Bob does not see a flicker
 - Timestamps show correct labels in both English and Arabic
 
-
-
 ### Next
 
 - Voice draft persistence
 - Message editing
 
-
-
 ## 2026-10-01 — Voice draft persistence
-
-
 
 ### Added
 
@@ -616,18 +524,14 @@ daemon restarts. Freed with `fuser -k`.
 - `listVoiceDrafts()`
 - `pruneOldDrafts()` — removes drafts older than 24 hours
 
-
-
 ### Wired
 
 - `useVoiceRecorder.ts` now calls `saveVoiceDraft` inside `recorder.onstop`,
-after the blob is created and before the preview state is set. The call
-is fire-and-forget with a `.catch()` so a storage failure never blocks
-the recording UI.
+  after the blob is created and before the preview state is set. The call
+  is fire-and-forget with a `.catch()` so a storage failure never blocks
+  the recording UI.
 - `VoiceRecorder.tsx` calls `clearVoiceDraft(conversationId)` on send and
-on discard.
-
-
+  on discard.
 
 ### Why IndexedDB
 
@@ -637,24 +541,20 @@ on discard.
 - IndexedDB has a larger quota (typically 50% of free disk)
 - One draft per conversation, keyed by `conversationId`
 
-
-
 ### Verified
 
 - Record → Stop writes exactly one row to `chatup-drafts` → `voiceDrafts`
 - The row contains a non-empty Blob, the correct mimeType, durationMs,
-and a recent createdAt
+  and a recent createdAt
 - Sending the message clears the row
 - Discarding clears the row
 - Closing the tab preserves the row
 - Two conversations produce two independent rows
 - Incognito and normal tabs have separate IndexedDB storage; drafts do
-not leak between them
+  not leak between them
 - Drafts older than 24 hours are removed on the next app load
 - If IndexedDB is unavailable (e.g., some private modes), the save fails
-silently and the recording still works
-
-
+  silently and the recording still works
 
 ### Notes
 
@@ -662,18 +562,12 @@ silently and the recording still works
 - Storage is per browser context, not per user account
 - The feature is client-only; no backend or schema changes
 
-
-
 ### Next
 
 - Message editing
 - Local cache for messages and conversations
 
-
-
 ## 2026-10-03 — Concurrency verification, copy message, DB pointer fix
-
-
 
 ### Concurrency verification
 
@@ -709,10 +603,10 @@ Added in `apps/web/src/features/chat/components/MessageBubble.tsx`.
 - Icon becomes a checkmark for 1.5 seconds to confirm
 - Only shown for text messages with a non-empty body
 - Keyboard accessible (focus-visible) and screen-reader friendly
-(`aria-label="Copy message"`)
+  (`aria-label="Copy message"`)
 - Colors match the bubble: light on own, slate on other
 - `title` attribute removed to prevent the native tooltip from
-overlaying the timestamp
+  overlaying the timestamp
 
 Verified: copy works on own and other messages, preserves newlines,
 emoji, and mixed Arabic/English text. No copy icon on image or voice
@@ -732,22 +626,20 @@ was in the DB state.
 **Fix:**
 
 - Repair SQL repopulated `lastMessageId` and `lastActivityAt` from the
-newest message per conversation
+  newest message per conversation
 - Added a defensive fallback in `loadRowsForUser()` in
-`conversations.service.ts` — if `row.lastMessage` is null but
-messages exist, it fetches the latest one before returning. The extra
-query runs only for affected rows.
+  `conversations.service.ts` — if `row.lastMessage` is null but
+  messages exist, it fetches the latest one before returning. The extra
+  query runs only for affected rows.
 
 **Verified:**
 
 - Fallback proven by temporarily re-nulling the pointer; the API still
-returned the correct preview
+  returned the correct preview
 - `send()` updates the pointer on every message (verified with a
-test send)
+  test send)
 - All 3 conversation rows now have a non-null `lastMessageId`
 - `npx tsc --noEmit` passes
-
-
 
 ### Next
 
@@ -755,11 +647,7 @@ test send)
 - Local cache for messages and conversations
 - 100-user load test (after Phase 6 deployment)
 
-
-
 ## 2026-10-04 — Message edit, delete, copy toast, info modal
-
-
 
 ### Message editing
 
@@ -769,8 +657,6 @@ test send)
 - `(edited)` label next to the timestamp
 - Optimistic update with rollback; real-time via `message:edited`
 
-
-
 ### Message deletion
 
 - `Message.deletedAt` column + migration
@@ -778,15 +664,11 @@ test send)
 - Trash icon, confirmation dialog, placeholder for deleted messages
 - Conversation list preview updates on delete
 
-
-
 ### Copy toast
 
 - `ToastProvider` with three variants and a shrinking progress bar
 - Wired to the copy message button
 - No dependencies; CSS-animated progress
-
-
 
 ### Message info modal
 
@@ -795,16 +677,12 @@ test send)
 - Backend exposes `deliveredAt`, `readAt`, `playedAt` on `Message`
 - `useConversationMessages` merges them into state on socket events
 
-
-
 ### Files
 
 - Backend: schema + 3 migrations, messages.service, messages.routes
 - Shared: types, schemas, events, realtime
 - Frontend: ToastProvider, MessageInfoModal, MessageBubble,
-MessageComposer, useConversationMessages, chat page
-
-
+  MessageComposer, useConversationMessages, chat page
 
 ### Verified
 
@@ -812,22 +690,18 @@ MessageComposer, useConversationMessages, chat page
 - Two-browser test: edit, delete, copy, info modal all work
 - RTL: all features render correctly in Arabic
 
-
-
 ## 2026-10-5 - Jump to latest, Unread-Message Divider
-
-
 
 ### Unread divider
 
 **Added**
 
 - Divider in `MessageList.tsx` that appears above the first unread
-message
+  message
 - `initialUnreadCount` captured once on mount via a ref in `page.tsx`
-so it does not flash to 0 after `markRead` fires
+  so it does not flash to 0 after `markRead` fires
 - Divider index computed with `useMemo` and clamped to 0 when unreadCount
-exceeds the currently loaded messages
+  exceeds the currently loaded messages
 
 **Verified**
 
@@ -835,8 +709,6 @@ exceeds the currently loaded messages
 - Divider disappears on next visit once messages are read
 - No divider when unreadCount is 0
 - Deleted message in the unread block still shows the divider
-
-
 
 ### Jump to latest
 
@@ -856,11 +728,7 @@ exceeds the currently loaded messages
 - RTL: button sits on the left edge in Arabic
 - Mobile: renders correctly
 
-
-
 ## 2026-10-06 — Profile page with avatar upload
-
-
 
 ### Backend
 
@@ -872,24 +740,22 @@ exceeds the currently loaded messages
 
 - Constructor now takes `StorageService` alongside `db` and `config`
 - `toAuthUser()` is async and generates a signed URL for the avatar via
-`storage.signedGetUrl('attachments/<avatarMediaId>', ttl)`
+  `storage.signedGetUrl('attachments/<avatarMediaId>', ttl)`
 - `updateProfile()` now handles `avatarMediaId`:
   - Validates the attachment exists, is owned by the user, and is
-  `COMPLETED`
+    `COMPLETED`
   - Updates both `displayName` and `avatarMediaId` when provided
   - Returns `AuthUser` with a fresh signed avatar URL
 
 **Auth routes**
 
 - `PATCH /auth/profile` already existed; it now returns a user with a
-signed `avatarUrl`
+  signed `avatarUrl`
 - `GET /auth/me` returns the same shape
 
 **Config**
 
 - Confirmed `MEDIA_URL_TTL_SECONDS` in `AppConfig`
-
-
 
 ### Frontend
 
@@ -900,7 +766,7 @@ signed `avatarUrl`
 `apps/web/src/shared/providers/AuthProvider.tsx`
 
 - Exposed `setUser` from the context so other components can update the
-cached user after a profile change
+  cached user after a profile change
 
 `apps/web/src/features/profile/api.ts` (new)
 
@@ -930,7 +796,7 @@ cached user after a profile change
 `apps/web/src/features/chat/components/ChatHeader.tsx`
 
 - Renders the other participant's avatar image when available, initials
-otherwise
+  otherwise
 - Presence dot sits on top of the avatar
 - RTL-correct positioning
 
@@ -938,25 +804,21 @@ otherwise
 
 - Same avatar-or-initials fallback in the conversation list rows
 
-
-
 ### Fixed during this work
 
 - `AuthService` was not receiving `StorageService` — fixed by updating
-the constructor and the call site in `auth.routes.ts`
+  the constructor and the call site in `auth.routes.ts`
 - `toAuthUser` was synchronous and returned `avatarUrl: null` — now async
-with signed URL generation
+  with signed URL generation
 - `updateProfile` was not handling `avatarMediaId` — added validation
-and the update
+  and the update
 - `config.storage.signedUrlTtlSeconds` did not exist — replaced with
-`config.MEDIA_URL_TTL_SECONDS`
-
-
+  `config.MEDIA_URL_TTL_SECONDS`
 
 ### Verified
 
 - Upload a JPEG → avatar appears immediately in the profile page, in the
-chat header, and in the sidebar footer
+  chat header, and in the sidebar footer
 - Refresh → avatar persists
 - Non-image file → error toast; avatar reverts
 - Change avatar to a new image → old signed URL is replaced everywhere
@@ -966,19 +828,15 @@ chat header, and in the sidebar footer
 - `POST /api/media/image` returns 201 with an attachment ID
 - `GET /api/auth/me` returns 200 with a signed `avatarUrl`
 
-
-
 ### Notes
 
 - Avatars are stored in the GCS emulator (local) or GCS (production),
-not in PostgreSQL. Postgres holds only `avatarMediaId` as a foreign
-key to `MediaAttachment`.
+  not in PostgreSQL. Postgres holds only `avatarMediaId` as a foreign
+  key to `MediaAttachment`.
 - Signed URLs have a 900-second TTL. When an avatar URL expires, the
-next `/auth/me` or conversation fetch regenerates it.
+  next `/auth/me` or conversation fetch regenerates it.
 - `UpdateProfileInput` in `packages/shared` supports both `displayName`
-and `avatarMediaId` as optional fields.
-
-
+  and `avatarMediaId` as optional fields.
 
 ### Files touched (Oct 6)
 
@@ -999,8 +857,6 @@ and `avatarMediaId` as optional fields.
 - `apps/web/src/features/conversations/components/ConversationItem.tsx`
 - `apps/web/src/features/chat/components/ChatHeader.tsx`
 
-
-
 ### What is next
 
 - Local cache (IndexedDB) for messages and conversations
@@ -1009,11 +865,7 @@ and `avatarMediaId` as optional fields.
 - Dockerfile + CI/CD + GCP deployment
 - 100-user load test (after deployment)
 
-
-
 ## 2026-10-07 — Message Queues (BullMQ) + REDIS_URL
-
-
 
 ### Added
 
@@ -1032,8 +884,6 @@ and `avatarMediaId` as optional fields.
 - Hourly media cleanup job, daily session cleanup job
 - Optional Bull Board dashboard (`/admin/queues`, dev-only)
 
-
-
 ### Config / Environment
 
 - Added `REDIS_URL` to:
@@ -1043,8 +893,6 @@ and `avatarMediaId` as optional fields.
 - `queue.ts` uses `config.REDIS_URL` with `maxRetriesPerRequest: null`
 - Redis connection is separate from the normal Redis client for BullMQ
 
-
-
 ### Why BullMQ
 
 - Redis already in the stack
@@ -1053,8 +901,6 @@ and `avatarMediaId` as optional fields.
 - Supports delayed, repeated, and cron jobs
 - `bull-board` available for inspection
 
-
-
 ### Verified
 
 - Manual media cleanup run deleted an orphaned `PENDING` row
@@ -1062,8 +908,6 @@ and `avatarMediaId` as optional fields.
 - BullMQ keys appear in Redis (`bull:media-cleanup:*`, `bull:session-cleanup:*`)
 - Server boots cleanly with workers registered
 - `REDIS_URL` validation passes; no `Invalid environment variables` error
-
-
 
 ### Notes
 
@@ -1085,14 +929,10 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
 - **Found:** message sends, receipts, and uploads were all synchronous; presence was an in-memory `Map`; no redis-adapter — so a second server instance would be blind.
 - **Decision:** keep the synchronous DB write as the correctness core (persist-before-ack, idempotent), and put durability + side effects on queues with sync fallback.
 
-
-
 ## Step 1 - Installed missing dependencies
 
 - Added `@socket.io/redis-adapter` (multi-instance socket fan-out) and `sharp` (image thumbnails) to `@chatup/server`.
 - Why: adapter lets any instance/worker emit into the correct Socket.IO rooms; sharp extracts dimensions and generates thumbnails.
-
-
 
 ## Step 2 - Rewrote `platform/queue.ts` (the heart of the feature)
 
@@ -1102,28 +942,22 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
   - Idempotent job IDs (`persist_<conv>_<sender>_<clientId>`), so retries collapse instead of duplicating.
   - Throw `QueueUnavailableError` when Redis is down → every caller falls back to sync (app works single-node without Redis).
 - **Workers** (`startWorkers`), each with its own Redis connection + tuned concurrency:
-  - *persist* (10): writes the message via `MessagesService.send()`, then fans out offline notifications.
-  - *read-receipts* (20): stamps delivered/read in bulk.
-  - *notifications* (5): skips users who reconnected while the job waited (push provider plugs in here; currently a structured log).
-  - *media* (5): sharp thumbnail + width/height backfill.
-  - *cleanup* (1 each): stale `PENDING` uploads, expired/revoked sessions, on repeatable schedules (30 min / hourly).
-  - *dead-letter* (1): permanently failed jobs are moved there with reason + payload for inspection.
+  - _persist_ (10): writes the message via `MessagesService.send()`, then fans out offline notifications.
+  - _read-receipts_ (20): stamps delivered/read in bulk.
+  - _notifications_ (5): skips users who reconnected while the job waited (push provider plugs in here; currently a structured log).
+  - _media_ (5): sharp thumbnail + width/height backfill.
+  - _cleanup_ (1 each): stale `PENDING` uploads, expired/revoked sessions, on repeatable schedules (30 min / hourly).
+  - _dead-letter_ (1): permanently failed jobs are moved there with reason + payload for inspection.
 - **Ops surface:** `queueHealth()` (powers `GET /api/queues/health`), `closeQueues()` for graceful shutdown, `getPersistQueueEvents()` so senders can await worker completion.
-
-
 
 ## Step 3 - Added `StorageService.getBuffer()`
 
-- Workers need to *read* objects (thumbnails), but storage only had `put` + `signedGetUrl`. One small method closed that gap.
-
-
+- Workers need to _read_ objects (thumbnails), but storage only had `put` + `signedGetUrl`. One small method closed that gap.
 
 ## Step 4 - Wired the redis-adapter (`realtime/io.ts`)
 
 - After creating the Socket.IO server, attach `createAdapter(pub, sub)` on Redis — wrapped in try/catch so dev/tests without Redis keep the in-memory adapter.
 - Passed `presence` into the message-socket registration so handlers can check online state.
-
-
 
 ## Step 5 - Put sends on the queue (`messages.routes.ts` + `messages.service.ts`)
 
@@ -1131,26 +965,18 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
 - Added `MessagesService.getByClientId()` so the ack can be built from the worker's write without emitting twice.
 - Added offline fan-out inside `send()`: after emit, enqueue notifications only for currently-offline participants (constructor takes an optional `presence` — no break to existing callers).
 
-
-
 ## Step 6 - Put receipts on the queue
 
 - `message:read` and the `message:new` delivery-ack now `enqueueReadReceipt()` with immediate direct-write fallback, so read states never stall when Redis is down.
-
-
 
 ## Step 7 - Put media post-processing on the queue
 
 - After upload completes in `media.routes.ts`, fire-and-forget `enqueueMediaProcessing()` — the HTTP 201 stays fast; the worker fills in dimensions + thumbnail. Failures are swallowed (original is already usable).
 
-
-
 ## Step 8 - Wired startup/shutdown (`main.ts`)
 
 - `await startWorkers({ db, config, logger, storage, io, presence })` after routes; added `GET /api/queues/health` and `/api/queues/dead-letter`; `closeQueues()` joins the shutdown sequence.
 - Added missing `REDIS_URL` to `.env.example`.
-
-
 
 ## Step 9 - Verified end to end
 
@@ -1158,19 +984,13 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
 - Wrote a throwaway two-user socket script (login ×2 → connect ×2 → queued send → realtime match → idempotent-retry dedupe → GCS upload → queue health/dead-letter). Full pass.
 - `vitest` 10/10 after fixing the test-double bug.
 
-
-
 ## Step 10 - Fixed 3 bugs found during verification
 
 - **BullMQ** `:` **in job IDs:** every enqueue threw (`Custom Id cannot contain :`) and silently fell back to sync — the queue path was never actually engaged. Switched to `_` separators.
 - **Thumbnail child key** (`<key>/thumb-320`): fake-gcs-server can't nest under an existing object. Sibling key (`<key>-thumb-320`) works on emulator and real GCS.
 - **Test fake id mismatch** (`media.routes.test.ts`): map keyed by `att-N` while the record carried the route's uuid → update missed → 500. Key by `data.id ?? att-N`.
 
-
-
 ## 2026-10-12 — PWA + FCM push notifications
-
-
 
 ### Built
 
@@ -1200,15 +1020,11 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
 
 - `docs/push-notifications.md`, `docs/fcm-debugging.md`, `docs/architecture.md`, `docs/realtime.md` — comprehensive documentation pass
 
-
-
 ### Decisions made
 
 - Push is best-effort/observational: `PushAck` never drives ticks or read state — `MessageReceipt` remains the source of truth
 - Socket stays the realtime core for online users (including hidden tabs); FCM covers offline → online transitions and background
 - iOS requires Home-Screen install for push — surfaced as an in-app guidance banner instead of a silent failure
-
-
 
 ### Verified
 
@@ -1216,25 +1032,17 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
 - Server boots with FCM worker path; disabled by default so local dev needs no Firebase project
 - `fcm.test.ts` + `notifications.service.test.ts` pass
 
-
-
 ### Notes
 
 - FCM needs HTTPS in production (and a tunnel URL in `APP_URL`/`CORS_ORIGIN` for phone testing)
 - Mic/push permissions both require user gestures — banners are the only trigger points
 - Service-account key file is gitignored and never committed
 
-
-
 ### Next
 
 - Advanced message search (backend `tsvector` module + frontend `/search`)
 
-
-
 ## 2026-10-13 — Advanced search: backend diagnosis + frontend completion
-
-
 
 ### Fixed (backend — the 500 on `GET /api/search/messages`)
 
@@ -1244,16 +1052,12 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
 
 **"Route not found" red error on `/search` (screenshot).** Not a routing problem — `features/search/api.ts` called `apiFetch('/api/search/messages')` but `apiFetch` already prepends `/api`, so the browser hit `/api/api/search/messages` → 404 `Errors.notFound('Route')` → message surfaced via `useSearch` error state. Fixed to `apiFetch('/search/messages')`, matching the convention in `chat/api.ts`.
 
-
-
 ### Built (frontend completion)
 
 - `ConversationList.tsx` — grouped the search + new-chat icon buttons into one right-aligned actions container (they were loose `justify-between` siblings, drifting apart); unified icon size/focus-ring/hover treatment; merged duplicate `lucide-react` import; fixed footer `<Link>` indentation
 - `MessageBubble.tsx` — added `data-sequence={message.sequence}` on the outer bubble (jump target; `sequence` already on shared `Message` type)
 - `[id]/page.tsx` — fixed two jump-to-message bugs: (1) effect ran on `[jumpTo]` only, before async history loaded, so it silently found nothing — now waits on `[jumpTo, messages.length, isLoading]`; (2) moved the effect below `useConversationMessages` (it referenced `messages`/`isLoading` before their `const` declarations → TDZ crash)
 - `search.test.ts` — rewrote from scratch (old file imported non-existent `createApp` and `./helpers/factories`). Now an integration test following `media.routes.test.ts` conventions: per-test express app with `createSearchModule` + stub `requireAuth` bound to the test user, seeded via `requirePrisma()` (auto-truncated `beforeEach`). Fixed expectation 400 → **422** (`http.ts` maps `ZodError` → `validation_error`), `encodeURIComponent` on Arabic/ISO params
-
-
 
 ### Verified
 
@@ -1262,15 +1066,11 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
 - Live curl: `/api/search/messages?q=milestone` previously 500 on every keystroke, now 200 with results + `<mark>` snippets
 - Time-filter semantics confirmed by design (not a bug): "Last 3 months" = `createdAt >= now−90d`, so yesterday's messages correctly match; only "Older than a year" excludes recent. Results order by `rank DESC, sequence DESC` (relevance first)
 
-
-
 ### Known limitations
 
 - "Custom range" pill is a no-op — no date pickers in the UI, sends no `after`/`before`, behaves like "Any time"
 - `searchConversations` endpoint exists but has no frontend surface yet
 - Jump-to-message targets only loaded history; a very old `jumpTo` sequence may need "Load earlier" first (no auto-pagination to the target yet)
-
-
 
 ### Next
 
@@ -1278,3 +1078,100 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
 - Playwright two-user search E2E (`search.spec.ts` — needs real fixtures, the pasted draft references non-existent `./fixtures/twoUsers`)
 - `docs/testing.md` + `docs/load-test.md`, 100-user Artillery run
 
+## 2026-10-13 — GitHub Actions CI/CD + web Dockerfile fixes
+
+### Problems solved
+
+**1. `apps/web/Dockerfile` had 4 build-breaking bugs**
+
+- `/repo/...` COPY paths (build `WORKDIR` is `/app`) → fixed
+- `npm run build -w packages/shared` — no such script → removed
+- `output: "standalone"` missing from `next.config.ts` → added
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` had no `ARG`/`ENV` → added
+- Files: `apps/web/Dockerfile`, `apps/web/next.config.ts`
+
+**2. Added `.github/workflows/ci.yml` + `cd.yml`**
+
+- CI: format + typecheck + unit + server integration
+  (postgres:16/redis:7 services, `chatup_test`, migrate deploy) + web build
+- CD (push `main`): images → Artifact Registry → migrate via
+  Cloud Run job → both services to Cloud Run
+  (`--timeout=3600 --session-affinity`) → smoke `/healthz` `/readyz` `/`
+- WIF auth, no static keys; pins: checkout@v7, setup-node@v7,
+  build-push-action@v7, metadata-action@v6
+
+### Known limitations
+
+- Pipelines not run end-to-end locally — first green run in Actions
+- CD needs one-time GCP setup + Vars/Secrets (see cd.yml header);
+  set stable `*_URL` vars after first deploy and re-run
+
+## 2026-10-13 — k6 load test (TS) + first 100-VU evidence run
+
+### What was added
+
+- `load-test/k6/chatup.load.ts` (k6 TS source, esbuild bundle),
+  `k6.d.ts`, `load-test/seed-load.ts` (100 synthetic users +
+  paired 1:1 convos + sessions → gitignored `.sessions.json`)
+- Root scripts: `load:seed`, `load:bundle`, `load:smoke`, `load`;
+  `+esbuild` devDep (only new dep); `environment: production`
+  on all CD jobs (per quoted GCP guidance)
+- Design constraints found while building: auth endpoints are
+  rate-limited (20/15min/IP) so VUs reuse seeded sessions;
+  unsafe HTTP needs `x-csrf-token`; sends are socket-only, so k6
+  drives Engine.IO polling directly (handshake → 40 → drain poll
+  → emit `42<ackId>` → ack `43<ackId>`, `\x1e` batches with
+  balanced-bracket parse, cookie jar re-seeded every iteration,
+  same-clientId retry on transport blips)
+
+### Evidence — full run, local, 100 VUs × 10 min, 24,848 sends
+
+- Checks 24,849/24,849 (100%), sends 0 failed / 0 missing /
+  0 dupes / 0 idempotent mismatches, broadcasts 48,419
+- HTTP API p50 ~236ms / p95 407ms (<500 gate), error rate 0.59%
+- Ack latency (persist pipeline) p50 1.1s / p95 2.8s
+- Server ~11% CPU avg / ~400MB; postgres/redis low single digits
+- Dev DB load data cleaned afterwards (100 users, 50 convos,
+  28k messages); tmp server stopped, port 4000 free
+
+### Known limitations
+
+- Evidence is local single-box, not Cloud Run sizing — rerun with
+  `K6_BASE_URL=<prod-url>` after deploy (off-peak, watch budget)
+- k6 replaces the AGENTS.md Artillery plan per user direction;
+  artillery dep left in place, AGENTS.md text untouched
+
+## 2026-10-14 — docker-compose.full.yml verified end to end
+
+### Problems solved
+
+**1. Three Dockerfile bugs found by actually building**
+
+- Server `build` stage missed `apps/server/tsconfig.json`
+  (typecheck needs it) → added to COPY
+- Web stage missed `tsconfig.base.json` (extends breaks
+  Turbopack build) → added to COPY
+- Web `RUN --mount=type=cache, target=...` (space after comma)
+  → `type=cache,target=...`
+- Web build args must be non-empty (`local` placeholders in
+  full.yml) — empty values rejected by builder
+
+**2. Real app bug: emulator signed URLs used the internal host**
+
+- `signedGetUrl` inherited `http://gcs:4443` (unreachable from
+  browsers) → new optional `GCS_PUBLIC_URL` origin override
+  (empty in prod = untouched real GCS URLs)
+- Files: `platform/config.ts`, `platform/storage.ts`,
+  `docker-compose.full.yml`, `.env.example`
+
+**3. Full-stack proof: 15/15 checks green on built images**
+
+- `healthz`/`readyz`/web `/` 200; register ×2 + login; web
+  rewrite proxy → server:4000; 1:1 start; socket send ack;
+  history; 403s for non-members (history + media); image
+  upload → attach → signed URL downloads bytes
+- Images: `chatup-server:local` 2.2GB (keeps devDeps for tsx
+  runtime — slim-down is open follow-up), `chatup-web:local`
+  312MB, both linux/amd64, all 5 services healthy
+- Dockerfiles added to `.prettierignore` (no parser); repo-wide
+  `format:check` was already red before this work — untouched

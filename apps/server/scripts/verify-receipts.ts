@@ -106,7 +106,11 @@ async function main(): Promise<void> {
   bobSocket.disconnect();
 
   console.log('A+B self-receipts for Alice on her own message:', selfReceipts, '(expected 0)');
-  console.log('C   legitimate receipt for Bob:', bobReceipt ? 'created' : 'MISSING', '(expected created)');
+  console.log(
+    'C   legitimate receipt for Bob:',
+    bobReceipt ? 'created' : 'MISSING',
+    '(expected created)',
+  );
 
   const passed = selfReceipts === 0 && bobReceipt !== null;
   console.log(passed ? 'PASS' : 'FAIL');

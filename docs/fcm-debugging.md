@@ -9,6 +9,7 @@ This document provides a setup checklist, diagnostic commands, and updated sourc
 Run these commands from your project root (`/media/storage/Projects/chatUp`) to inspect your FCM configuration and trigger test execution.
 
 ### Step 1: Verify Key File Location & Permissions
+
 Ensure `serviceAccountKey.json` is located in `apps/server/` and has valid permissions:
 
 ```bash
@@ -19,7 +20,7 @@ ls -la apps/server/serviceAccountKey.json
 node -e "console.log(require('./apps/server/serviceAccountKey.json').project_id)"
 ```
 
-*(Output should print: `chatup-dev`)*
+_(Output should print: `chatup-dev`)_
 
 ---
 
@@ -58,21 +59,25 @@ FCM_SERVICE_ACCOUNT_PATH=serviceAccountKey.json
 ## 2. Bugs Found & Fixed
 
 ### Bug 1: Missing `webpush` Configuration Block
+
 **File:** `apps/server/src/platform/fcm.ts`
 
 The multicast message payload lacked a `webpush.notification` block. Without it, desktop browser push notifications silently fail to display because the browser's Push API requires explicit web push notification configuration.
 
 ### Bug 2: Silent Credential Resolution Failures
+
 **File:** `apps/server/src/platform/fcm.ts`
 
 The `resolveCredential()` function had no logging. If the service account key was malformed or missing, failures were invisible — the function silently fell through to ADC which would then fail with an opaque error.
 
 ### Bug 3: No Per-Token Error Diagnostics
+
 **File:** `apps/server/src/platform/fcm.ts`
 
 When individual push deliveries failed in a multicast batch, the error details were discarded. Only aggregate counts were returned, making it impossible to diagnose why specific tokens failed.
 
 ### Bug 4: Inconsistent `SendPushInput` Interface Naming
+
 **Files:** `apps/server/src/platform/fcm.ts`, `apps/server/src/platform/queue.ts`
 
 The external API used `fids` as the field name which was confusing since the database column storing these values is `fcmToken`. Renamed to `tokens` in the public interface while keeping `fids` internally in the multicast payload for the Firebase Admin SDK v14.

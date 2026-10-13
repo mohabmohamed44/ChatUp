@@ -13,11 +13,10 @@ export default function Offline() {
 
         {/* Text Content */}
         <div className="space-y-2">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            You&apos;re offline
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">You&apos;re offline</h1>
           <p className="text-sm text-slate-600 leading-relaxed">
-            ChatUp needs an active internet connection to send and receive messages. Please check your network settings and try again.
+            ChatUp needs an active internet connection to send and receive messages. Please check
+            your network settings and try again.
           </p>
         </div>
 

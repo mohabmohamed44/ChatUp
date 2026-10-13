@@ -13,7 +13,7 @@ function scryptAsync(
   password: string,
   salt: Buffer,
   keylen: number,
-  options: ScryptOptions
+  options: ScryptOptions,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     scryptCallback(password, salt, keylen, options, (err, derivedKey) => {

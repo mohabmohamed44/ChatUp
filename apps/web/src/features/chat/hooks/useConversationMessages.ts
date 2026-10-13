@@ -223,8 +223,7 @@ export function useConversationMessages(conversationId: string, currentUserId: s
               payload.status === 'delivered' || payload.status === 'read'
                 ? (message.deliveredAt ?? payload.at)
                 : message.deliveredAt,
-            readAt:
-              payload.status === 'read' ? (message.readAt ?? payload.at) : message.readAt,
+            readAt: payload.status === 'read' ? (message.readAt ?? payload.at) : message.readAt,
           };
         });
         persistMessages(conversationId, next);
@@ -261,9 +260,7 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     function onPlayed(payload: MessagePlayedUpdate) {
       setMessages((prev) => {
         const next = prev.map((m) =>
-          m.id === payload.messageId
-            ? { ...m, playedAt: m.playedAt ?? payload.playedAt }
-            : m,
+          m.id === payload.messageId ? { ...m, playedAt: m.playedAt ?? payload.playedAt } : m,
         );
         persistMessages(conversationId, next);
         return next;
@@ -399,26 +396,20 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     setReloadToken((token) => token + 1);
   }, []);
 
-  const appendOptimistic = useCallback(
-    (message: ChatMessage) => {
-      setMessages((prev) => mergeMessages(prev, [message]));
-    },
-    [],
-  );
+  const appendOptimistic = useCallback((message: ChatMessage) => {
+    setMessages((prev) => mergeMessages(prev, [message]));
+  }, []);
 
-  const replaceOptimistic = useCallback(
-    (clientId: string, real: Message) => {
-      setMessages((prev) => {
-        const next = mergeMessages(
-          prev.filter((message) => message.clientId !== clientId),
-          [real],
-        );
-        persistMessages(conversationIdRef.current, next);
-        return next;
-      });
-    },
-    [],
-  );
+  const replaceOptimistic = useCallback((clientId: string, real: Message) => {
+    setMessages((prev) => {
+      const next = mergeMessages(
+        prev.filter((message) => message.clientId !== clientId),
+        [real],
+      );
+      persistMessages(conversationIdRef.current, next);
+      return next;
+    });
+  }, []);
 
   const markFailed = useCallback((clientId: string) => {
     setMessages((prev) =>
@@ -428,74 +419,66 @@ export function useConversationMessages(conversationId: string, currentUserId: s
     );
   }, []);
 
-  const editMessageAction = useCallback(
-    async (messageId: string, newBody: string) => {
-      // Optimistic update
-      const previous = messagesRef.current.find((m) => m.id === messageId);
-      const cid = conversationIdRef.current;
-      setMessages((prev) => {
-        const next = prev.map((m) =>
-          m.id === messageId
-            ? { ...m, body: newBody, editedAt: new Date().toISOString() }
-            : m,
-        );
-        persistMessages(cid, next);
-        return next;
-      });
+  const editMessageAction = useCallback(async (messageId: string, newBody: string) => {
+    // Optimistic update
+    const previous = messagesRef.current.find((m) => m.id === messageId);
+    const cid = conversationIdRef.current;
+    setMessages((prev) => {
+      const next = prev.map((m) =>
+        m.id === messageId ? { ...m, body: newBody, editedAt: new Date().toISOString() } : m,
+      );
+      persistMessages(cid, next);
+      return next;
+    });
 
-      const ack = await editMessageRequest(messageId, newBody);
-      if (!ack.ok) {
-        // Rollback
-        if (previous) {
-          setMessages((prev) => {
-            const next = prev.map((m) => (m.id === messageId ? previous : m));
-            persistMessages(cid, next);
-            return next;
-          });
-        }
-        setError(ack.error.message);
-      } else {
-        persistMessages(cid, messagesRef.current);
+    const ack = await editMessageRequest(messageId, newBody);
+    if (!ack.ok) {
+      // Rollback
+      if (previous) {
+        setMessages((prev) => {
+          const next = prev.map((m) => (m.id === messageId ? previous : m));
+          persistMessages(cid, next);
+          return next;
+        });
       }
-    },
-    [],
-  );
+      setError(ack.error.message);
+    } else {
+      persistMessages(cid, messagesRef.current);
+    }
+  }, []);
 
-  const deleteMessageAction = useCallback(
-    async (messageId: string) => {
-      const previous = messagesRef.current.find((m) => m.id === messageId);
-      const cid = conversationIdRef.current;
-      setMessages((prev) => {
-        const next = prev.map((m) =>
-          m.id === messageId
-            ? {
-                ...m,
-                body: null,
-                attachment: null,
-                deletedAt: new Date().toISOString(),
-              }
-            : m,
-        );
-        persistMessages(cid, next);
-        return next;
-      });
+  const deleteMessageAction = useCallback(async (messageId: string) => {
+    const previous = messagesRef.current.find((m) => m.id === messageId);
+    const cid = conversationIdRef.current;
+    setMessages((prev) => {
+      const next = prev.map((m) =>
+        m.id === messageId
+          ? {
+              ...m,
+              body: null,
+              attachment: null,
+              deletedAt: new Date().toISOString(),
+            }
+          : m,
+      );
+      persistMessages(cid, next);
+      return next;
+    });
 
-      const ack = await deleteMessageRequest(messageId);
-      if (!ack.ok) {
-        if (previous) {
-          setMessages((prev) => {
-            const next = prev.map((m) => (m.id === messageId ? previous : m));
-            persistMessages(cid, next);
-            return next;
-          });
-        }
-        setError(ack.error.message);
-      } else {
-        persistMessages(cid, messagesRef.current);
+    const ack = await deleteMessageRequest(messageId);
+    if (!ack.ok) {
+      if (previous) {
+        setMessages((prev) => {
+          const next = prev.map((m) => (m.id === messageId ? previous : m));
+          persistMessages(cid, next);
+          return next;
+        });
       }
-    },
-    [],
-  );
+      setError(ack.error.message);
+    } else {
+      persistMessages(cid, messagesRef.current);
+    }
+  }, []);
 
   const markPlayedAction = useCallback(
     async (messageId: string) => {

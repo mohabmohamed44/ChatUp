@@ -12,6 +12,10 @@
 - GCS storage adapter in `platform/storage.ts`
 - Shared types in `packages/shared`
 - Initial web scaffold (I made most edits to the web layer myself)
+- GitHub Actions CI/CD workflows (Cloud Run CD to match the GCP direction)
+- k6 load test in TS: I chose Engine.IO polling for sends after finding
+  k6 has no Socket.IO client; I picked seeded sessions over live logins
+  because of the auth rate limiter
 
 ## How I verified AI output
 
@@ -20,6 +24,7 @@
 - Curled `/healthz` and `/readyz` — both returned 200
 - Ran `docker compose up -d` and confirmed Postgres, Redis, GCS emulator healthy
 - Read every file the agent wrote before committing
+- Reviewed both workflows against repo scripts and Dockerfiles
 
 ## Corrections I made
 

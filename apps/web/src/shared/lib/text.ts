@@ -10,7 +10,6 @@ linkify.set({
   fuzzyIP: false,
 });
 
-
 linkify.add('ftp:');
 linkify.add('mailto:');
 linkify.add('//');
@@ -20,8 +19,7 @@ export const TRUNCATE_AT = 300;
 export type Direction = 'ltr' | 'rtl' | 'auto';
 
 export type TextSegment =
-  | { type: 'text'; value: string }
-  | { type: 'link'; value: string; href: string };
+  { type: 'text'; value: string } | { type: 'link'; value: string; href: string };
 
 export type DirectionInfo = {
   dir: Direction;
@@ -30,14 +28,13 @@ export type DirectionInfo = {
   hasMixed: boolean;
 };
 
-
-
 // Latin letters including extended ranges (À-ɏ, Latin-1 supplement + extended-A/B)
 const LATIN_RE = /[A-Za-z\u00C0-\u024F]/;
 
 // Hebrew, Arabic, Arabic supplement, Arabic extended-A,
 // Hebrew/Arabic presentation forms
-const ARABIC_RE = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+const ARABIC_RE =
+  /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
 
 /**
  * Returns the base direction of a string, plus script flags.
@@ -91,8 +88,7 @@ export function truncate(
   const windowGraphemes = graphemes.slice(0, limit);
   const lastSpaceGraphemeIndex = windowGraphemes.findLastIndex((g) => g === ' ');
 
-  const cutAt =
-    lastSpaceGraphemeIndex > limit - 30 ? lastSpaceGraphemeIndex : limit;
+  const cutAt = lastSpaceGraphemeIndex > limit - 30 ? lastSpaceGraphemeIndex : limit;
 
   const previewBody = windowGraphemes.slice(0, cutAt).join('').trimEnd();
 
@@ -124,8 +120,6 @@ export function isUnbreakable(text: string, threshold = 60): boolean {
   const trimmed = text.trim();
   return trimmed.length > threshold && !trimmed.includes(' ');
 }
-
-
 
 /**
  * Splits a string into plain-text and link segments.

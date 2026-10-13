@@ -17,7 +17,8 @@ type LoginFieldErrors = Partial<Record<'email' | 'password', string>>;
 const fieldClassName =
   'w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-11 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:ring-red-500/15';
 
-const iconClassName = 'pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400';
+const iconClassName =
+  'pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400';
 
 const fieldErrorClassName = 'mt-1.5 text-xs text-red-600';
 
@@ -60,7 +61,9 @@ export function LoginForm() {
       await login(result.data);
       router.replace('/conversations');
     } catch (err) {
-      setApiError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+      setApiError(
+        err instanceof ApiError ? err.message : 'Something went wrong. Please try again.',
+      );
       setIsSubmitting(false);
     }
   }
@@ -118,7 +121,8 @@ export function LoginForm() {
             value={password}
             onChange={(event) => {
               setPassword(event.target.value);
-              if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }));
+              if (fieldErrors.password)
+                setFieldErrors((prev) => ({ ...prev, password: undefined }));
             }}
             aria-invalid={fieldErrors.password ? true : undefined}
             aria-describedby={fieldErrors.password ? PASSWORD_ERROR_ID : undefined}
@@ -135,7 +139,7 @@ export function LoginForm() {
             {showPassword ? (
               <Eye size={20} aria-hidden="true" />
             ) : (
-              <EyeClosed size={20}  aria-hidden="true" />
+              <EyeClosed size={20} aria-hidden="true" />
             )}
           </button>
         </div>
@@ -152,8 +156,20 @@ export function LoginForm() {
           role="alert"
           className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            aria-hidden="true"
+            className="mt-0.5 h-4 w-4 shrink-0"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+            />
           </svg>
           <span>{apiError}</span>
         </div>

@@ -10,13 +10,7 @@ import {
   truncate,
 } from '@/shared/lib/text';
 
-export function MessageBody({
-  text,
-  isOwn,
-}: {
-  text: string;
-  isOwn: boolean;
-}) {
+export function MessageBody({ text, isOwn }: { text: string; isOwn: boolean }) {
   const [expanded, setExpanded] = useState(false);
 
   const { text: preview, isTruncated } = useMemo(() => truncate(text, TRUNCATE_AT), [text]);

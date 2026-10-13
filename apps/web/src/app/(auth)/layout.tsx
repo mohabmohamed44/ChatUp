@@ -1,4 +1,4 @@
-import { MessagesSquare } from "lucide-react";
+import { MessagesSquare } from 'lucide-react';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +12,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
         <div className="relative z-10 flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white backdrop-blur">
-          <MessagesSquare size={20} />
+            <MessagesSquare size={20} />
           </span>
           <span className="text-xl font-semibold tracking-tight text-white">ChatUp</span>
         </div>

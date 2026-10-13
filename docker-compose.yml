@@ -10,11 +10,11 @@ services:
       POSTGRES_PASSWORD: chatup_dev_password
       POSTGRES_DB: chatup
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chatup"]
+      test: ['CMD-SHELL', 'pg_isready -U chatup']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
     container_name: chatup_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
 
@@ -34,11 +34,11 @@ services:
     restart: unless-stopped
     command: -scheme http -backend filesystem -filesystem-root /data -public-host localhost:4443
     ports:
-      - "4443:4443"   # Cloud Storage API + signed URLs
+      - '4443:4443' # Cloud Storage API + signed URLs
     volumes:
       - gcs_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:4443/storage/v1/b"]
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://localhost:4443/storage/v1/b']
       interval: 5s
       timeout: 5s
       retries: 5

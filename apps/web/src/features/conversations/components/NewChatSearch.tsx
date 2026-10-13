@@ -84,9 +84,7 @@ export function NewChatSearch({ onDone }: { onDone: () => void }) {
 
       <div id={resultsId} aria-live="polite" className="text-xs text-slate-500">
         {isSearching ? 'Searching…' : null}
-        {!isSearching && hasQuery && results.length === 0 && !error
-          ? 'No users found.'
-          : null}
+        {!isSearching && hasQuery && results.length === 0 && !error ? 'No users found.' : null}
         {!hasQuery ? `Type at least ${LIMITS.SEARCH_QUERY_MIN} characters.` : null}
       </div>
 
@@ -120,9 +118,7 @@ export function NewChatSearch({ onDone }: { onDone: () => void }) {
                   {initialsOf(person.displayName)}
                 </span>
               )}
-              <span className="min-w-0 flex-1 truncate text-slate-800">
-                {person.displayName}
-              </span>
+              <span className="min-w-0 flex-1 truncate text-slate-800">{person.displayName}</span>
               <span className="text-xs text-indigo-600">
                 {startingId === person.id ? 'Starting…' : 'Chat'}
               </span>

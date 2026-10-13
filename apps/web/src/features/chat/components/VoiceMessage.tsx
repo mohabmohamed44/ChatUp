@@ -4,11 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Mic, Play, Pause } from 'lucide-react';
 import type { Attachment } from '@chatup/shared';
 import { cn } from '@/shared/lib/utils';
-import {
-  releaseAudio,
-  requestExclusivePlay,
-  stopAllVoicePlayback,
-} from '../lib/voicePlayback';
+import { releaseAudio, requestExclusivePlay, stopAllVoicePlayback } from '../lib/voicePlayback';
 
 function formatMs(ms: number): string {
   if (!ms || ms < 0) return '0:00';
@@ -100,8 +96,8 @@ export function VoiceMessage({
   return (
     <div className="flex min-w-[220px] items-center gap-3 py-1">
       <span
-        title={played ? playedTitle ?? 'Played' : undefined}
-        aria-label={played ? playedTitle ?? 'Played' : undefined}
+        title={played ? (playedTitle ?? 'Played') : undefined}
+        aria-label={played ? (playedTitle ?? 'Played') : undefined}
         className="inline-flex shrink-0 items-center"
       >
         <Mic

@@ -73,15 +73,13 @@ export function MessageList({
   }, [initialUnreadCount, messages.length]);
 
   function updateJumpVisibility(el: HTMLDivElement) {
-    const distanceFromBottom =
-      el.scrollHeight - el.scrollTop - el.clientHeight;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setShowJumpButton(distanceFromBottom > SCROLL_SHOW_BUTTON_PX);
   }
 
   function handleScroll(event: UIEvent<HTMLDivElement>) {
     const el = event.currentTarget;
-    shouldStickRef.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD_PX;
+    shouldStickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD_PX;
     updateJumpVisibility(el);
     // Hybrid loading: scrolling near the top auto-fetches older history.
     // The button stays as fallback (short lists, retry after failure).
@@ -103,9 +101,7 @@ export function MessageList({
     const firstId = messages[0]?.id ?? null;
     const lastId = messages.at(-1)?.id ?? null;
     const prepended =
-      firstId !== firstIdRef.current &&
-      lastId === lastIdRef.current &&
-      firstIdRef.current !== null;
+      firstId !== firstIdRef.current && lastId === lastIdRef.current && firstIdRef.current !== null;
     const appended = lastId !== lastIdRef.current;
 
     if (prepended) {
@@ -267,11 +263,7 @@ export function MessageList({
 
 function UnreadDivider() {
   return (
-    <div
-      role="separator"
-      aria-label="Unread messages"
-      className="flex items-center gap-2 py-2"
-    >
+    <div role="separator" aria-label="Unread messages" className="flex items-center gap-2 py-2">
       <div className="h-px flex-1 bg-indigo-200" />
       <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
         Unread messages

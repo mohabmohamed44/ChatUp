@@ -23,19 +23,19 @@ self.addEventListener('notificationclick', (event) => {
     Promise.all([
       ackPush(d, 'clicked'),
       (async () => {
-      const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-      const client = windowClients.find((c) => 'focus' in c);
-      if (client) {
-        try {
-          await client.navigate(targetUrl);
-        } catch (_) {
-          /* navigate can fail for uncontrolled clients; focusing is still fine */
+        const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const client = windowClients.find((c) => 'focus' in c);
+        if (client) {
+          try {
+            await client.navigate(targetUrl);
+          } catch (_) {
+            /* navigate can fail for uncontrolled clients; focusing is still fine */
+          }
+          return client.focus();
         }
-        return client.focus();
-      }
-      if (clients.openWindow) return clients.openWindow(targetUrl);
+        if (clients.openWindow) return clients.openWindow(targetUrl);
       })(),
-    ])
+    ]),
   );
 });
 
@@ -137,7 +137,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => Promise.allSettled(SHELL_ASSETS.map((url) => cache.add(url))))
+      .then((cache) => Promise.allSettled(SHELL_ASSETS.map((url) => cache.add(url)))),
   );
   self.skipWaiting();
 });
@@ -147,9 +147,9 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
       )
-      .then(() => self.clients.claim())
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -158,7 +158,6 @@ self.addEventListener('activate', (event) => {
 // onBackgroundMessage and parse the FCM envelope with the wrong field names
 // (`payload.title` instead of `payload.notification.title`), producing a
 // generic "ChatUp / You have a new message" notification (or a duplicate).
-
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);

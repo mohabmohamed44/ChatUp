@@ -70,22 +70,24 @@ async function main() {
 
   const start = Date.now();
   const results = await Promise.all(
-    Array.from({ length: count }, (_, i) =>
-      new Promise<{ ok: boolean; error?: string }>((resolve) => {
-        socket.emit(
-          'message:send',
-          {
-            conversationId,
-            clientId: crypto.randomUUID(),
-            kind: 'text',
-            body: `${prefix} #${i + 1}`,
-          },
-          (ack: { ok: boolean; error?: { message?: string } }) => {
-            if (ack?.ok) resolve({ ok: true });
-            else resolve({ ok: false, error: ack?.error?.message });
-          },
-        );
-      }),
+    Array.from(
+      { length: count },
+      (_, i) =>
+        new Promise<{ ok: boolean; error?: string }>((resolve) => {
+          socket.emit(
+            'message:send',
+            {
+              conversationId,
+              clientId: crypto.randomUUID(),
+              kind: 'text',
+              body: `${prefix} #${i + 1}`,
+            },
+            (ack: { ok: boolean; error?: { message?: string } }) => {
+              if (ack?.ok) resolve({ ok: true });
+              else resolve({ ok: false, error: ack?.error?.message });
+            },
+          );
+        }),
     ),
   );
   const elapsed = Date.now() - start;
@@ -120,8 +122,7 @@ async function main() {
   socket.disconnect();
   await prisma.$disconnect();
 
-  const passed =
-    ok === count && rows.length === count && uniqueBodies.size === count;
+  const passed = ok === count && rows.length === count && uniqueBodies.size === count;
 
   console.log('');
   console.log(passed ? '✅ PASS' : '❌ FAIL');

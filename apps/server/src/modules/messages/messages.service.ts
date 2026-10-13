@@ -112,11 +112,7 @@ async function computeStatus(
  * - Recipient: when this viewer listened (unplayed mic badge).
  * Deleted messages never report played state — their content is masked.
  */
-async function computePlayedAt(
-  db: Tx,
-  row: MessageRow,
-  viewerId: string,
-): Promise<Date | null> {
+async function computePlayedAt(db: Tx, row: MessageRow, viewerId: string): Promise<Date | null> {
   if (row.kind.toLowerCase() !== 'audio') return null;
   if (row.deletedAt !== null) return null;
 
@@ -229,11 +225,7 @@ export class MessagesService {
           const attachment = await tx.mediaAttachment.findUnique({
             where: { id: input.attachmentId },
           });
-          if (
-            !attachment ||
-            attachment.ownerId !== senderId ||
-            attachment.status !== 'COMPLETED'
-          ) {
+          if (!attachment || attachment.ownerId !== senderId || attachment.status !== 'COMPLETED') {
             throw Errors.badRequest('Attachment not found or not ready');
           }
           attachmentId = attachment.id;
@@ -280,25 +272,17 @@ export class MessagesService {
       throw err;
     }
 
-    const payload = await toMessage(
-      this.db,
-      this.storage,
-      this.config,
-      message,
-      senderId,
-    );
+    const payload = await toMessage(this.db, this.storage, this.config, message, senderId);
 
-    this.io
-      .to(SOCKET_ROOMS.conversation(input.conversationId))
-      .emit(MESSAGE_EVENTS.new, {
-        message: payload,
-        // Lets online recipients show the sender in toasts/OS alerts without
-        // an extra lookup; optional so old clients keep working.
-        ...(await this.db.user
-          .findUnique({ where: { id: senderId }, select: { displayName: true } })
-          .then((u) => (u?.displayName ? { senderName: u.displayName } : {}))
-          .catch(() => ({}))),
-      });
+    this.io.to(SOCKET_ROOMS.conversation(input.conversationId)).emit(MESSAGE_EVENTS.new, {
+      message: payload,
+      // Lets online recipients show the sender in toasts/OS alerts without
+      // an extra lookup; optional so old clients keep working.
+      ...(await this.db.user
+        .findUnique({ where: { id: senderId }, select: { displayName: true } })
+        .then((u) => (u?.displayName ? { senderName: u.displayName } : {}))
+        .catch(() => ({}))),
+    });
 
     await this.emitConversationUpdate(input.conversationId);
 
@@ -320,9 +304,7 @@ export class MessagesService {
     if (!this.presence) return;
     const svc = new ConversationsService(this.db, this.storage, this.config);
     const participantIds = await svc.participantIds(input.conversationId);
-    const offline = participantIds.filter(
-      (id) => id !== senderId && !this.presence!.isOnline(id),
-    );
+    const offline = participantIds.filter((id) => id !== senderId && !this.presence!.isOnline(id));
     if (offline.length === 0) return;
     const { enqueueOfflineNotification } = await import('../../platform/queue');
     await enqueueOfflineNotification({
@@ -330,8 +312,7 @@ export class MessagesService {
       conversationId: input.conversationId,
       senderId,
       recipientIds: offline,
-      preview:
-        input.kind === 'text' ? (input.body ?? '').slice(0, 160) || null : `[${input.kind}]`,
+      preview: input.kind === 'text' ? (input.body ?? '').slice(0, 160) || null : `[${input.kind}]`,
     });
   }
 
@@ -341,11 +322,7 @@ export class MessagesService {
 
   private static readonly EDIT_WINDOW_MS = 15 * 60 * 1000;
 
-  async editMessage(
-    messageId: string,
-    userId: string,
-    newBody: string,
-  ): Promise<Message> {
+  async editMessage(messageId: string, userId: string, newBody: string): Promise<Message> {
     const message = await this.db.message.findUnique({
       where: { id: messageId },
       include: { attachment: true },
@@ -373,13 +350,7 @@ export class MessagesService {
       include: { attachment: true },
     });
 
-    const payload = await toMessage(
-      this.db,
-      this.storage,
-      this.config,
-      updated,
-      userId,
-    );
+    const payload = await toMessage(this.db, this.storage, this.config, updated, userId);
 
     // Notify the conversation participants in real time.
     this.io
@@ -422,13 +393,7 @@ export class MessagesService {
       include: { attachment: true },
     });
 
-    const payload = await toMessage(
-      this.db,
-      this.storage,
-      this.config,
-      updated,
-      userId,
-    );
+    const payload = await toMessage(this.db, this.storage, this.config, updated, userId);
 
     this.io
       .to(SOCKET_ROOMS.conversation(message.conversationId))
@@ -445,11 +410,7 @@ export class MessagesService {
   // Played
   // ---------------------------------------------------------------------------
 
-  async markPlayed(
-    conversationId: string,
-    userId: string,
-    messageId: string,
-  ): Promise<void> {
+  async markPlayed(conversationId: string, userId: string, messageId: string): Promise<void> {
     const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(conversationId, userId);
 
@@ -486,13 +447,11 @@ export class MessagesService {
       update: { playedAt: now },
     });
 
-    this.io
-      .to(SOCKET_ROOMS.conversation(conversationId))
-      .emit(MESSAGE_EVENTS.played, {
-        messageId,
-        userId,
-        playedAt: now.toISOString(),
-      });
+    this.io.to(SOCKET_ROOMS.conversation(conversationId)).emit(MESSAGE_EVENTS.played, {
+      messageId,
+      userId,
+      playedAt: now.toISOString(),
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -513,10 +472,7 @@ export class MessagesService {
     );
   }
 
-  private async emitConversationUpdateFor(
-    conversationId: string,
-    userId: string,
-  ): Promise<void> {
+  private async emitConversationUpdateFor(conversationId: string, userId: string): Promise<void> {
     try {
       const svc = new ConversationsService(this.db, this.storage, this.config);
       const summary = await svc.summaryForUser(conversationId, userId);
@@ -525,10 +481,7 @@ export class MessagesService {
         .to(SOCKET_ROOMS.user(userId))
         .emit(CONVERSATION_EVENTS.updated, { conversation: summary });
     } catch (err) {
-      this.logger.warn(
-        { err, conversationId, userId },
-        'Failed to emit conversation update',
-      );
+      this.logger.warn({ err, conversationId, userId }, 'Failed to emit conversation update');
     }
   }
 
@@ -536,11 +489,7 @@ export class MessagesService {
   // History / sync
   // ---------------------------------------------------------------------------
 
-  async history(
-    conversationId: string,
-    userId: string,
-    opts: { before?: string; limit: number },
-  ) {
+  async history(conversationId: string, userId: string, opts: { before?: string; limit: number }) {
     const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(conversationId, userId);
 
@@ -566,12 +515,7 @@ export class MessagesService {
     };
   }
 
-  async sync(
-    conversationId: string,
-    userId: string,
-    afterSequence: string | null,
-    limit: number,
-  ) {
+  async sync(conversationId: string, userId: string, afterSequence: string | null, limit: number) {
     const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(conversationId, userId);
 
@@ -598,11 +542,7 @@ export class MessagesService {
   // Receipts
   // ---------------------------------------------------------------------------
 
-  async markDelivered(
-    conversationId: string,
-    userId: string,
-    messageIds: string[],
-  ) {
+  async markDelivered(conversationId: string, userId: string, messageIds: string[]) {
     const conversations = new ConversationsService(this.db, this.storage, this.config);
     await conversations.requireMembership(conversationId, userId);
 
@@ -708,13 +648,11 @@ export class MessagesService {
     messageIds: string[],
     status: 'delivered' | 'read',
   ): Promise<void> {
-    this.io
-      .to(SOCKET_ROOMS.conversation(conversationId))
-      .emit(MESSAGE_EVENTS.status, {
-        conversationId,
-        messageIds,
-        status,
-        at: new Date().toISOString(),
-      });
+    this.io.to(SOCKET_ROOMS.conversation(conversationId)).emit(MESSAGE_EVENTS.status, {
+      conversationId,
+      messageIds,
+      status,
+      at: new Date().toISOString(),
+    });
   }
 }

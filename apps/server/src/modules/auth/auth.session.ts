@@ -38,11 +38,7 @@ export async function revokeSession(db: Db, sessionId: string): Promise<void> {
   await db.session.update({ where: { id: sessionId }, data: { revokedAt: new Date() } });
 }
 
-export function setSessionCookies(
-  res: Response,
-  config: AppConfig,
-  bundle: SessionBundle,
-): void {
+export function setSessionCookies(res: Response, config: AppConfig, bundle: SessionBundle): void {
   const base = { path: '/', secure: config.isProd, sameSite: 'lax' as const };
   res.cookie(LIMITS.SESSION_COOKIE_NAME, bundle.token, {
     ...base,

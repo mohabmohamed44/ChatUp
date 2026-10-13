@@ -1,22 +1,13 @@
 import { Router, type RequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
-import {
-  LIMITS,
-  loginSchema,
-  registerSchema,
-  updateProfileSchema,
-} from '@chatup/shared';
+import { LIMITS, loginSchema, registerSchema, updateProfileSchema } from '@chatup/shared';
 import type { AppConfig } from '../../platform/config';
 import type { Db } from '../../platform/db';
 import { asyncHandler, Errors } from '../../platform/errors';
 import type { Logger } from '../../platform/logger';
 import { createRequireAuth } from './auth.middleware';
 import { AuthService, toAuthUser } from './auth.service';
-import {
-  clearSessionCookies,
-  setSessionCookies,
-  validateSession,
-} from './auth.session';
+import { clearSessionCookies, setSessionCookies, validateSession } from './auth.session';
 import type { StorageService } from '../../platform/storage';
 
 export interface AuthModule {

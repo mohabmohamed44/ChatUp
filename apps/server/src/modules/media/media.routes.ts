@@ -32,13 +32,7 @@ function detectImageMime(buf: Buffer): string | null {
 function detectAudioMime(buf: Buffer): string | null {
   // WebM/Matroska (EBML header 0x1A45DFA3) - what Chrome/Firefox MediaRecorder
   // actually produces for audio/webm;codecs=opus
-  if (
-    buf.length >= 4 &&
-    buf[0] === 0x1a &&
-    buf[1] === 0x45 &&
-    buf[2] === 0xdf &&
-    buf[3] === 0xa3
-  ) {
+  if (buf.length >= 4 && buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) {
     return 'audio/webm';
   }
   // Legacy/fallback: some variations / future RIFF-based WebM
@@ -56,7 +50,7 @@ function detectAudioMime(buf: Buffer): string | null {
     return 'audio/ogg';
   }
   if (
-    buf.length >= 3 &&  
+    buf.length >= 3 &&
     (buf.subarray(0, 3).equals(Buffer.from('ID3')) ||
       (buf.length >= 2 && buf[0] === 0xff && buf[1] !== undefined && (buf[1] & 0xe0) === 0xe0))
   ) {
@@ -87,7 +81,8 @@ export function createMediaModule(deps: {
     asyncHandler(async (req, res) => {
       const auth = req.auth;
       if (!auth) throw Errors.unauthorized();
-      const kind = req.params.kind === 'image' ? 'image' : req.params.kind === 'audio' ? 'audio' : null;
+      const kind =
+        req.params.kind === 'image' ? 'image' : req.params.kind === 'audio' ? 'audio' : null;
       if (!kind) throw Errors.badRequest('Unsupported media kind');
 
       const file = req.file;
@@ -109,7 +104,13 @@ export function createMediaModule(deps: {
         kind === 'audio' && typeof req.body.durationMs === 'string'
           ? Number.parseInt(req.body.durationMs, 10)
           : null;
-      if (kind === 'audio' && (durationMs === null || Number.isNaN(durationMs) || durationMs <= 0 || durationMs > LIMITS.RECORDING_MAX_SECONDS * 1000)) {
+      if (
+        kind === 'audio' &&
+        (durationMs === null ||
+          Number.isNaN(durationMs) ||
+          durationMs <= 0 ||
+          durationMs > LIMITS.RECORDING_MAX_SECONDS * 1000)
+      ) {
         throw Errors.badRequest('Audio messages require a valid durationMs');
       }
 
@@ -170,39 +171,45 @@ export function createMediaModule(deps: {
     }),
   );
 
-  router.get('/media/:id', deps.requireAuth, asyncHandler(async (req, res) => {
-    const auth = req.auth;
-    if (!auth) throw Errors.unauthorized();
+  router.get(
+    '/media/:id',
+    deps.requireAuth,
+    asyncHandler(async (req, res) => {
+      const auth = req.auth;
+      if (!auth) throw Errors.unauthorized();
 
-    const attachment = await db.mediaAttachment.findUnique({
-      where: {
-        id: req.params.id as string,
-      },
-      include: {
-        message: {
-          include: {
-            conversation: {
-              include: {
-                participants: { select: { userId: true } },
+      const attachment = await db.mediaAttachment.findUnique({
+        where: {
+          id: req.params.id as string,
+        },
+        include: {
+          message: {
+            include: {
+              conversation: {
+                include: {
+                  participants: { select: { userId: true } },
+                },
               },
             },
           },
         },
-      },
-    })
+      });
 
-    if (!attachment) throw Errors.notFound('Media attachment not found');
-    if (!attachment.message) throw Errors.badRequest('Media attachment is not associated with a message');
+      if (!attachment) throw Errors.notFound('Media attachment not found');
+      if (!attachment.message)
+        throw Errors.badRequest('Media attachment is not associated with a message');
 
-    const isParticipant = attachment.message.conversation.participants.some((p) => p.userId === auth.userId);
+      const isParticipant = attachment.message.conversation.participants.some(
+        (p) => p.userId === auth.userId,
+      );
 
-    if (!isParticipant) throw Errors.forbidden('Not a partcipant in this conversation');
+      if (!isParticipant) throw Errors.forbidden('Not a partcipant in this conversation');
 
-    const url = await storage.signedGetUrl(attachment.storageKey, 300);
+      const url = await storage.signedGetUrl(attachment.storageKey, 300);
 
-    res.json({ url });
-
-  }));
+      res.json({ url });
+    }),
+  );
 
   return router;
 }

@@ -100,10 +100,7 @@ export function MessageComposer({
         </div>
       ) : null}
       <div className="flex items-end gap-2">
-        <ImagePicker
-          onUploaded={handleImageUploaded}
-          disabled={disabled}
-        />
+        <ImagePicker onUploaded={handleImageUploaded} disabled={disabled} />
         <label htmlFor="message-composer" className="sr-only">
           Message
         </label>
@@ -123,16 +120,16 @@ export function MessageComposer({
           aria-describedby="message-composer-hint"
           className="max-h-32 flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/15 disabled:opacity-60"
         />
-          <VoiceRecorder
-            conversationId={conversationId}
-            onRecorded={(attachmentId, durationMs, previewUrl) => {
-              if (disabled) return;
-              onSend({ kind: 'audio', attachmentId, durationMs });
-              // previewUrl is unused for audio today — the real URL replaces it on ack
-              void previewUrl;
-            }}
-            disabled={disabled}
-          />
+        <VoiceRecorder
+          conversationId={conversationId}
+          onRecorded={(attachmentId, durationMs, previewUrl) => {
+            if (disabled) return;
+            onSend({ kind: 'audio', attachmentId, durationMs });
+            // previewUrl is unused for audio today — the real URL replaces it on ack
+            void previewUrl;
+          }}
+          disabled={disabled}
+        />
         <button
           type="submit"
           disabled={!canSend}
@@ -142,10 +139,7 @@ export function MessageComposer({
           <SendHorizontal className="h-5 w-5 rtl:-scale-x-100" aria-hidden="true" />
         </button>
       </div>
-      <p
-        id="message-composer-hint"
-        className="mt-1.5 hidden text-[11px] text-slate-400 sm:block"
-      >
+      <p id="message-composer-hint" className="mt-1.5 hidden text-[11px] text-slate-400 sm:block">
         Enter to send · Shift + Enter for a new line
       </p>
     </form>

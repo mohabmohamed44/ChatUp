@@ -20,7 +20,6 @@
   }
 }
 
-
 /*
 * Font stack for message text.
 * Inter for Latin, Noto Sans Arabic for Arabic glyphs.
@@ -28,17 +27,17 @@
 * no network requests and no FOUC.
 */
 @layer base {
-.font-message {
-  font-family:
-    'Inter',
-    'Noto Sans Arabic',
-    'Segoe UI',
-    -apple-system,
-    'Helvetica Neue',
-    Arial,
-    'Apple Color Emoji',
-    'Segoe UI Emoji',
-    sans-serif;
+  .font-message {
+    font-family:
+      'Inter',
+      'Noto Sans Arabic',
+      'Segoe UI',
+      -apple-system,
+      'Helvetica Neue',
+      Arial,
+      'Apple Color Emoji',
+      'Segoe UI Emoji',
+      sans-serif;
   }
 }
 

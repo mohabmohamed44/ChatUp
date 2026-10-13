@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { ConversationSummary } from '@chatup/shared';
 import { getSocket } from '@/shared/lib/socket';
 import { cacheConversations, getCachedConversations, setLastSyncAt } from '@/shared/lib/cache';
@@ -74,9 +67,7 @@ function useConversationsState(): ConversationsValue {
                 item.id === payload.conversation.id ? payload.conversation : item,
               )
             : [payload.conversation, ...prev];
-        const sorted = [...next].sort((a, b) =>
-          b.lastActivityAt.localeCompare(a.lastActivityAt),
-        );
+        const sorted = [...next].sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
         void cacheConversations(sorted);
         return sorted;
       });

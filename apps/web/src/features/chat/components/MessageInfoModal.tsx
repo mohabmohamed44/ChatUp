@@ -97,11 +97,7 @@ export function MessageInfoModal({
           <InfoRow
             icon={<CheckCheck className="h-4 w-4" />}
             label="Delivered"
-            value={
-              message.deliveredAt
-                ? formatFullTimestamp(message.deliveredAt, locale)
-                : null
-            }
+            value={message.deliveredAt ? formatFullTimestamp(message.deliveredAt, locale) : null}
             done={Boolean(message.deliveredAt)}
           />
           <InfoRow
@@ -114,9 +110,7 @@ export function MessageInfoModal({
             <InfoRow
               icon={<Mic className="h-4 w-4" />}
               label="Played"
-              value={
-                message.playedAt ? formatFullTimestamp(message.playedAt, locale) : null
-              }
+              value={message.playedAt ? formatFullTimestamp(message.playedAt, locale) : null}
               done={Boolean(message.playedAt)}
             />
           ) : null}

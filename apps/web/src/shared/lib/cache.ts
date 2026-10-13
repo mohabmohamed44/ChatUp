@@ -52,26 +52,19 @@ function getDB(): Promise<IDBPDatabase<ChatUpDB>> {
   return dbPromise;
 }
 
-export async function cacheMessages(
-  conversationId: string,
-  messages: Message[],
-): Promise<void> {
+export async function cacheMessages(conversationId: string, messages: Message[]): Promise<void> {
   try {
     const db = await getDB();
     const tx = db.transaction('messages', 'readwrite');
     const toCache = messages.slice(-MAX_MESSAGES_PER_CONVERSATION);
-    await Promise.all(
-      toCache.map((m) => tx.store.put({ ...m, _conversationId: conversationId })),
-    );
+    await Promise.all(toCache.map((m) => tx.store.put({ ...m, _conversationId: conversationId })));
     await tx.done;
   } catch (err) {
     console.warn('[cache] cacheMessages failed', err);
   }
 }
 
-export async function getCachedMessages(
-  conversationId: string,
-): Promise<Message[]> {
+export async function getCachedMessages(conversationId: string): Promise<Message[]> {
   try {
     const db = await getDB();
     const rows = await db.getAllFromIndex('messages', 'byConversation', conversationId);
@@ -97,9 +90,7 @@ export async function deleteMessageFromCache(messageId: string): Promise<void> {
   return deleteCachedMessage(messageId);
 }
 
-export async function cacheConversations(
-  conversations: ConversationSummary[],
-): Promise<void> {
+export async function cacheConversations(conversations: ConversationSummary[]): Promise<void> {
   try {
     const db = await getDB();
     const tx = db.transaction('conversations', 'readwrite');
@@ -153,22 +144,22 @@ export async function pruneOldData(): Promise<void> {
 // Meta - misc key/value storage
 
 export async function setMeta<T>(key: string, value: T): Promise<void> {
-    try {
-        const db = await getDB();
-        await db.put('meta', { key, value });
-    } catch(error) {
-        console.warn('[cache] setMeta failed', key, error);
-    }
+  try {
+    const db = await getDB();
+    await db.put('meta', { key, value });
+  } catch (error) {
+    console.warn('[cache] setMeta failed', key, error);
+  }
 }
 
 export async function getMeta<T>(key: string): Promise<T | null> {
-    try {
-        const db = await getDB();
-        const row = await db.get('meta', key);
-        return row ? (row.value as T) : null;
-    } catch {
-        return null;
-    }
+  try {
+    const db = await getDB();
+    const row = await db.get('meta', key);
+    return row ? (row.value as T) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function deletMeta(key: string): Promise<void> {
@@ -197,9 +188,7 @@ export async function getCachedUserId(): Promise<string | null> {
   return getMeta<string>(META_USER_ID);
 }
 
-export async function setLastOpenedConversation(
-  conversationId: string,
-): Promise<void> {
+export async function setLastOpenedConversation(conversationId: string): Promise<void> {
   await setMeta(META_LAST_CONVERSATION, conversationId);
 }
 

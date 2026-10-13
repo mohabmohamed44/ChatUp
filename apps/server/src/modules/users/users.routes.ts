@@ -6,11 +6,7 @@ import type { Db } from '../../platform/db';
 import { asyncHandler, Errors } from '../../platform/errors';
 import type { StorageService } from '../../platform/storage';
 
-const searchQuerySchema = z
-  .string()
-  .trim()
-  .min(LIMITS.SEARCH_QUERY_MIN)
-  .max(100);
+const searchQuerySchema = z.string().trim().min(LIMITS.SEARCH_QUERY_MIN).max(100);
 
 export class UsersService {
   constructor(

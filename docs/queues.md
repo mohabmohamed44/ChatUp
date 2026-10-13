@@ -2,15 +2,15 @@
 
 ## What runs where
 
-| Path | Mechanism |
-|---|---|
-| Typing, presence, live `message:new` fan-out | Direct Socket.IO (+ `redis-adapter` when Redis is up, so 2+ instances stay consistent) |
-| `message:send` persistence | `message-persistence` queue (BullMQ), idempotent via `(conversationId, senderId, clientId)` unique key; falls back to direct DB write when Redis is down |
-| Delivery/read stamping | `read-receipts` queue (debounced, collapsing `read` jobs); direct fallback |
-| Offline recipients | `offline-notifications` queue; worker suppresses if the user reconnected (push provider plugs in here — currently a structured log) |
-| Image thumbnails + dimensions | `media-processing` queue (sharp); original is usable immediately, thumbnail lands at `<storageKey>-thumb-320` |
-| Stale `PENDING` uploads, expired/revoked sessions | `media-cleanup` (30 min) + `session-cleanup` (hourly) repeatable jobs |
-| Permanently failed jobs | `dead-letter` queue, inspectable at `GET /api/queues/dead-letter` |
+| Path                                              | Mechanism                                                                                                                                                |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Typing, presence, live `message:new` fan-out      | Direct Socket.IO (+ `redis-adapter` when Redis is up, so 2+ instances stay consistent)                                                                   |
+| `message:send` persistence                        | `message-persistence` queue (BullMQ), idempotent via `(conversationId, senderId, clientId)` unique key; falls back to direct DB write when Redis is down |
+| Delivery/read stamping                            | `read-receipts` queue (debounced, collapsing `read` jobs); direct fallback                                                                               |
+| Offline recipients                                | `offline-notifications` queue; worker suppresses if the user reconnected (push provider plugs in here — currently a structured log)                      |
+| Image thumbnails + dimensions                     | `media-processing` queue (sharp); original is usable immediately, thumbnail lands at `<storageKey>-thumb-320`                                            |
+| Stale `PENDING` uploads, expired/revoked sessions | `media-cleanup` (30 min) + `session-cleanup` (hourly) repeatable jobs                                                                                    |
+| Permanently failed jobs                           | `dead-letter` queue, inspectable at `GET /api/queues/dead-letter`                                                                                        |
 
 ## Operate
 

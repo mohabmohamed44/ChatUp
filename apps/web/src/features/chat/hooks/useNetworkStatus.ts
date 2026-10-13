@@ -13,8 +13,12 @@ export function useNetworkStatus() {
   const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
-    function onOnline() { setBrowserOnline(true); }
-    function onOffline() { setBrowserOnline(false); }
+    function onOnline() {
+      setBrowserOnline(true);
+    }
+    function onOffline() {
+      setBrowserOnline(false);
+    }
 
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);

@@ -41,8 +41,8 @@ export async function uploadMedia(file: File, kind: 'image' | 'audio', durationM
   return res.json() as Promise<{ attachment: Attachment }>;
 }
 
-export async function getMediaUrl(attachmentId: string): Promise<{url: string}> {
-  return apiFetch<{url: string}>(`/media/${attachmentId}`);
+export async function getMediaUrl(attachmentId: string): Promise<{ url: string }> {
+  return apiFetch<{ url: string }>(`/media/${attachmentId}`);
 }
 
 export function editMessage(messageId: string, body: string): Promise<Ack<Message>> {
@@ -59,16 +59,9 @@ export function deleteMessage(messageId: string): Promise<Ack<Message>> {
   });
 }
 
-export function markPlayed(
-  messageId: string,
-  conversationId: string,
-): Promise<Ack<null>> {
+export function markPlayed(messageId: string, conversationId: string): Promise<Ack<null>> {
   const socket = getSocket();
   return new Promise((resolve) => {
-    socket.emit(
-      MESSAGE_EVENTS.played,
-      { messageId, conversationId },
-      resolve,
-    );
+    socket.emit(MESSAGE_EVENTS.played, { messageId, conversationId }, resolve);
   });
 }

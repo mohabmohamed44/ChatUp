@@ -29,5 +29,9 @@ load-test/results/
 # by scripts/generate-sw.mjs via predev/prebuild). Template is committed.
 apps/web/public/sw.js
 
+# k6 load-test artifacts: raw session tokens + compiled bundle. Never commit.
+load-test/.sessions.json
+load-test/k6/dist/
+
 # Committed env documentation (negates the .env.* / .env.example rules above).
 apps/web/.env.example

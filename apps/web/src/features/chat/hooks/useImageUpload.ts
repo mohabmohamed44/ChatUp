@@ -95,25 +95,22 @@ export function useImageUpload() {
    * Uploads an image. Returns `{ attachmentId }` on success, `null` on failure.
    * Progress and error state are exposed through the hook's return value.
    */
-  const upload = useCallback(
-    async (file: File): Promise<UploadResult | null> => {
-      setState({ uploading: true, progress: 0, error: null });
+  const upload = useCallback(async (file: File): Promise<UploadResult | null> => {
+    setState({ uploading: true, progress: 0, error: null });
 
-      try {
-        const result = await uploadWithProgress(file, 'image', undefined, (percent) => {
-          setState((prev) => ({ ...prev, progress: percent }));
-        });
+    try {
+      const result = await uploadWithProgress(file, 'image', undefined, (percent) => {
+        setState((prev) => ({ ...prev, progress: percent }));
+      });
 
-        setState({ uploading: false, progress: 100, error: null });
-        return result;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Upload failed';
-        setState({ uploading: false, progress: 0, error: message });
-        return null;
-      }
-    },
-    [],
-  );
+      setState({ uploading: false, progress: 100, error: null });
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      setState({ uploading: false, progress: 0, error: message });
+      return null;
+    }
+  }, []);
 
   /**
    * Uploads audio. Same shape as `upload`, but requires `durationMs` because the

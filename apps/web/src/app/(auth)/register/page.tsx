@@ -12,7 +12,7 @@ export default function RegisterPage() {
     <section aria-labelledby="register-heading" className="w-full">
       <div className="mb-8 flex justify-center lg:hidden">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/30">
-          <MessagesSquare size={24}/>
+          <MessagesSquare size={24} />
         </span>
       </div>
 
@@ -23,9 +23,7 @@ export default function RegisterPage() {
         >
           Create your account
         </h1>
-        <p className="mt-2 text-sm text-slate-500">
-          A few details and you are ready to chat.
-        </p>
+        <p className="mt-2 text-sm text-slate-500">A few details and you are ready to chat.</p>
       </header>
 
       <RegisterForm />

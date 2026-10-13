@@ -15,7 +15,7 @@ function scryptAsync(
   password: string,
   salt: Buffer,
   keylen: number,
-  options: ScryptOptions
+  options: ScryptOptions,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     scryptCallback(password, salt, keylen, options, (err, derivedKey) => {
@@ -35,15 +35,12 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const parts = stored.split('$');
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
 
-  const [, n, r, p, salt, key] = parts as [
-    string, string, string, string, string, string
-  ];
+  const [, n, r, p, salt, key] = parts as [string, string, string, string, string, string];
   const expected = Buffer.from(key, 'base64');
-  const derived = await scryptAsync(
-    password,
-    Buffer.from(salt, 'base64'),
-    expected.length,
-    { N: Number(n), r: Number(r), p: Number(p) }
-  );
+  const derived = await scryptAsync(password, Buffer.from(salt, 'base64'), expected.length, {
+    N: Number(n),
+    r: Number(r),
+    p: Number(p),
+  });
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }

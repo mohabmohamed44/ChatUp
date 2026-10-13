@@ -1,4 +1,9 @@
-import { LIMITS, PREVIEW_LABELS, type ConversationSummary, type MessagePreview } from '@chatup/shared';
+import {
+  LIMITS,
+  PREVIEW_LABELS,
+  type ConversationSummary,
+  type MessagePreview,
+} from '@chatup/shared';
 import type { AppConfig } from '../../platform/config';
 import type { Db } from '../../platform/db';
 import { Errors } from '../../platform/errors';
@@ -44,7 +49,7 @@ async function toSummary(
         kind: row.lastMessage.kind.toLowerCase() as MessagePreview['kind'],
         preview: previewText(row).slice(0, 140),
         createdAt: row.lastMessage.createdAt.toISOString(),
-      }) satisfies MessagePreview
+      } satisfies MessagePreview)
     : null;
   const participants = await Promise.all(
     row.participants
@@ -146,7 +151,10 @@ export class ConversationsService {
    * Summary as seen by `userId`: participants exclude the viewer and
    * unreadCount is specific to them.
    */
-  async summaryForUser(conversationId: string, userId: string): Promise<ConversationSummary | null> {
+  async summaryForUser(
+    conversationId: string,
+    userId: string,
+  ): Promise<ConversationSummary | null> {
     const rows = await this.loadRowsForUser(userId, conversationId);
     const row = rows[0];
     return row ? toSummary(row, userId, this.storage, this.ttlSeconds()) : null;
@@ -175,10 +183,7 @@ export class ConversationsService {
       data: {
         directKey,
         participants: {
-          create: [
-            { userId },
-            { userId: otherUserId },
-          ],
+          create: [{ userId }, { userId: otherUserId }],
         },
       },
       include: {

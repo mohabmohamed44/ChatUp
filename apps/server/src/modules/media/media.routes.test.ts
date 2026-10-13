@@ -9,12 +9,17 @@ import type { Logger } from '../../platform/logger';
 // Helpers to build fake buffers mimicking real file signatures
 function jpegBuffer(size = 1024) {
   const buf = Buffer.alloc(size);
-  buf[0] = 0xff; buf[1] = 0xd8; buf[2] = 0xff;
+  buf[0] = 0xff;
+  buf[1] = 0xd8;
+  buf[2] = 0xff;
   return buf;
 }
 function pngBuffer(size = 1024) {
   const buf = Buffer.alloc(size);
-  buf[0] = 0x89; buf[1] = 0x50; buf[2] = 0x4e; buf[3] = 0x47;
+  buf[0] = 0x89;
+  buf[1] = 0x50;
+  buf[2] = 0x4e;
+  buf[3] = 0x47;
   return buf;
 }
 function webpBuffer(size = 1024) {
@@ -31,23 +36,26 @@ function pdfBuffer() {
 }
 
 // Minimal fake logger
-const fakeLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as unknown as Logger;
+const fakeLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+} as unknown as Logger;
 
-function createTestApp(deps: {
-  db: any;
-  storage: any;
-  requireAuth?: any;
-}) {
+function createTestApp(deps: { db: any; storage: any; requireAuth?: any }) {
   const app = express();
   // replicate cookie parsing from http.ts
   app.use((req: any, _res, next) => {
     req.cookies = cookie.parse(req.headers.cookie ?? '');
     next();
   });
-  const requireAuth = deps.requireAuth ?? ((req: any, _res: any, next: any) => {
-    req.auth = { userId: 'user-a', sessionId: 'sess', csrfToken: 'csrf' };
-    next();
-  });
+  const requireAuth =
+    deps.requireAuth ??
+    ((req: any, _res: any, next: any) => {
+      req.auth = { userId: 'user-a', sessionId: 'sess', csrfToken: 'csrf' };
+      next();
+    });
   const router = createMediaModule({
     db: deps.db,
     config: { MEDIA_URL_TTL_SECONDS: 900 } as any,
@@ -70,7 +78,15 @@ describe('POST /api/media/:kind - image mime & size validation', () => {
           // The route supplies its own `id` (randomUUID); the fake must key
           // by the record's real id or the subsequent update misses (500).
           const id = data.id ?? `att-${++idCounter}`;
-          const rec = { ...data, id, storageKey: data.storageKey ?? '', status: 'PENDING', createdAt: new Date(), width: null, height: null };
+          const rec = {
+            ...data,
+            id,
+            storageKey: data.storageKey ?? '',
+            status: 'PENDING',
+            createdAt: new Date(),
+            width: null,
+            height: null,
+          };
           attachments.set(id, rec);
           return rec;
         }),
@@ -170,7 +186,9 @@ describe('POST /api/media/:kind - image mime & size validation', () => {
 describe('GET /api/media/:id - auth & participant checks', () => {
   const storage = {
     put: vi.fn(async () => {}),
-    signedGetUrl: vi.fn(async (key: string, ttl: number) => `https://signed.example/${key}?ttl=${ttl}`),
+    signedGetUrl: vi.fn(
+      async (key: string, ttl: number) => `https://signed.example/${key}?ttl=${ttl}`,
+    ),
   };
 
   it('Third user (not participant) → 403', async () => {
@@ -226,7 +244,8 @@ describe('GET /api/media/:id - auth & participant checks', () => {
     // Here we test GET /media/:id regenerates on each request (no caching of signed URL)
     const db = {
       mediaAttachment: {
-        findUnique: vi.fn()
+        findUnique: vi
+          .fn()
           .mockResolvedValueOnce({
             id: 'att-1',
             storageKey: 'attachments/att-1',
@@ -244,7 +263,10 @@ describe('GET /api/media/:id - auth & participant checks', () => {
       next();
     };
     const localStorage = {
-      signedGetUrl: vi.fn(async (key: string, ttl: number) => `https://signed.example/${key}?ttl=${ttl}&nonce=${Math.random()}`),
+      signedGetUrl: vi.fn(
+        async (key: string, ttl: number) =>
+          `https://signed.example/${key}?ttl=${ttl}&nonce=${Math.random()}`,
+      ),
       put: vi.fn(),
     };
     const app = createTestApp({ db, storage: localStorage, requireAuth });
