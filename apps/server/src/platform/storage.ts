@@ -23,7 +23,10 @@ export class StorageService {
   private readonly bucketName: string;
 
   constructor(
-    private readonly cfg: Pick<AppConfig, 'GCS_BUCKET' | 'GCS_PROJECT_ID' | 'GCS_EMULATOR_URL'>,
+    private readonly cfg: Pick<
+      AppConfig,
+      'GCS_BUCKET' | 'GCS_PROJECT_ID' | 'GCS_EMULATOR_URL' | 'GCS_PUBLIC_URL'
+    >,
   ) {
     this.bucketName = cfg.GCS_BUCKET;
     const emulatorUrl = cfg.GCS_EMULATOR_URL.trim();
@@ -67,7 +70,15 @@ export class StorageService {
         version: 'v4',
         expires: Date.now() + ttlSeconds * 1000,
       });
-    return url;
+    // Remap only the origin (protocol + host); path, bucket, query and
+    // signature bytes are untouched.
+    const publicOrigin = this.cfg.GCS_PUBLIC_URL.trim();
+    if (!publicOrigin) return url;
+    const signed = new URL(url);
+    const pub = new URL(publicOrigin);
+    signed.protocol = pub.protocol;
+    signed.host = pub.host;
+    return signed.toString();
   }
 
   async delete(key: string): Promise<void> {

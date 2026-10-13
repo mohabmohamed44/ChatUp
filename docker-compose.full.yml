@@ -48,6 +48,9 @@ services:
       GCS_PROJECT_ID: chatup-dev
       GCS_BUCKET: chatup-media
       GCS_EMULATOR_URL: http://gcs:4443
+      # Host-visible origin for emulator signed URLs (server reaches the
+      # emulator as http://gcs:4443, browsers need http://localhost:4443).
+      GCS_PUBLIC_URL: http://localhost:4443
       MEDIA_URL_TTL_SECONDS: 900
       APP_URL: http://localhost:3000
     ports:

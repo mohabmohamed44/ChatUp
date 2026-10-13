@@ -19,6 +19,10 @@ jobs:
   static:
     name: Format + typecheck
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://chatup:chatup@localhost:5432/chatup
+      SESSION_SECRET: ci-dummy-session-secret-at-least-32-chars-long
+      REDIS_URL: redis://localhost:6379
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
