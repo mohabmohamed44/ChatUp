@@ -35,7 +35,10 @@ name: CD
 #   which scopes the secrets and allows required-reviewer approval gates.
 #   Vars (required):  GCP_PROJECT_ID, CLOUDSQL_CONNECTION (project:region:instance),
 #                     CORS_ORIGIN + APP_URL (stable web URL — custom domain recommended),
-#                     NEXT_PUBLIC_API_URL (stable server URL), GCS_PROJECT_ID, GCS_BUCKET
+#                     NEXT_PUBLIC_API_URL (stable server URL), GCS_PROJECT_ID, GCS_BUCKET,
+#                     CLOUD_RUN_SERVICE_ACCOUNT (runtime SA, e.g. chatup-run@<project>.iam.gserviceaccount.com —
+#                     without it Cloud Run falls back to the default compute SA, which has no
+#                     Secret Manager access and the migrate/deploy steps fail)
 #   Vars (optional):  GCP_REGION (default europe-west1), GCP_AR_REPO (default chatup),
 #                     NEXT_PUBLIC_SOCKET_URL (defaults to NEXT_PUBLIC_API_URL),
 #                     NEXT_PUBLIC_FIREBASE_* (push config; empty = push stays disabled)
@@ -150,6 +153,7 @@ jobs:
             --project="$GCP_PROJECT_ID" \
             --region="$GCP_REGION" \
             --image="${{ needs.build-push.outputs.server-image }}" \
+            --service-account="${{ vars.CLOUD_RUN_SERVICE_ACCOUNT }}" \
             --command=npx --args="prisma,migrate,deploy" \
             --set-cloudsql-instances="$CLOUDSQL_CONNECTION" \
             --set-secrets="DATABASE_URL=DATABASE_URL:latest" \
@@ -183,6 +187,7 @@ jobs:
             --project="$GCP_PROJECT_ID" \
             --region="$GCP_REGION" \
             --image="${{ needs.build-push.outputs.server-image }}" \
+            --service-account="${{ vars.CLOUD_RUN_SERVICE_ACCOUNT }}" \
             --allow-unauthenticated \
             --port=4000 \
             --timeout=3600 \
@@ -233,6 +238,7 @@ jobs:
             --project="$GCP_PROJECT_ID" \
             --region="$GCP_REGION" \
             --image="${{ needs.build-push.outputs.web-image }}" \
+            --service-account="${{ vars.CLOUD_RUN_SERVICE_ACCOUNT }}" \
             --allow-unauthenticated \
             --port=3000 \
             --cpu=1 --memory=512Mi \
