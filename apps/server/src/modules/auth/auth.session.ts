@@ -39,7 +39,14 @@ export async function revokeSession(db: Db, sessionId: string): Promise<void> {
 }
 
 export function setSessionCookies(res: Response, config: AppConfig, bundle: SessionBundle): void {
-  const base = { path: '/', secure: config.isProd, sameSite: 'lax' as const };
+  // Prod serves web + api on different origins (both https): the Socket.IO
+  // handshake is cross-site, so the session cookie needs SameSite=None (which
+  // requires Secure — already true when isProd). Dev stays Lax over http.
+  const base: { path: string; secure: boolean; sameSite: 'none' | 'lax' } = {
+    path: '/',
+    secure: config.isProd,
+    sameSite: config.isProd ? 'none' : 'lax',
+  };
   res.cookie(LIMITS.SESSION_COOKIE_NAME, bundle.token, {
     ...base,
     httpOnly: true,
@@ -53,7 +60,12 @@ export function setSessionCookies(res: Response, config: AppConfig, bundle: Sess
 }
 
 export function clearSessionCookies(res: Response, config: AppConfig): void {
-  const opts = { path: '/', secure: config.isProd, sameSite: 'lax' as const };
+  // Attributes must match setSessionCookies or browsers keep the cookies.
+  const opts: { path: string; secure: boolean; sameSite: 'none' | 'lax' } = {
+    path: '/',
+    secure: config.isProd,
+    sameSite: config.isProd ? 'none' : 'lax',
+  };
   res.clearCookie(LIMITS.SESSION_COOKIE_NAME, opts);
   res.clearCookie(LIMITS.CSRF_COOKIE_NAME, opts);
 }
