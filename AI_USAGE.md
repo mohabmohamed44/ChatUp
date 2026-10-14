@@ -44,3 +44,16 @@
 
 - I did not hand-write every line. AI was used as a productivity tool.
 - I will not submit code I cannot explain. If I cannot explain it, I will either learn it or remove it.
+
+## 2026-10-14 — Socket handshake auth fallback (login loop on Cloud Run)
+
+- Asked AI to diagnose a login-then-bounce-to-login loop on the GCP deploy.
+- Diagnosis (verified with headers, curl, socket 101, and gcloud logs/traffic): the
+  session cookie belongs to the web domain but the socket dials the API domain
+  directly, so the handshake carried no cookie and was rejected as unauthorized.
+- AI implemented: CSRF token in Socket.IO handshake `auth` (web), server-side
+  `validateSessionByCsrf` fallback (cookie-first), plus `io.test.ts` covering
+  cookie / handshake-token / wrong-token / anonymous cases.
+- I reviewed the diff before deploying: auth stays cookie-first, the CSRF token
+  is a per-session unguessable secret sent over TLS only, and real session expiry
+  still logs the user out via the existing HTTP 401 path.

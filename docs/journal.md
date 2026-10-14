@@ -1175,3 +1175,30 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
   312MB, both linux/amd64, all 5 services healthy
 - Dockerfiles added to `.prettierignore` (no parser); repo-wide
   `format:check` was already red before this work — untouched
+
+## 2026-10-14 — Fix: login loop on Cloud Run (socket handshake without cookie)
+
+### Problems solved
+
+**4. Login succeeded (200) then bounced back to /login on GCP deploy**
+
+- Symptom: `POST /api/auth/login` 200 with `Set-Cookie`, then app returned to
+  `/login`. No 401 in the browser console; socket showed `101 Switching Protocols`.
+- Cause: the session cookie belongs to the web domain (set via the `/api`
+  rewrite proxy) but the socket dials the API domain directly, so the
+  cross-domain handshake carries no cookie and `io.use` rejected it with
+  `unauthorized` → `AuthProvider` cleared the user. Verified: curl with the
+  cookie → `/api/auth/me` 200; WS handshake headers → no `Cookie`; traffic
+  100% on one revision (no split-brain); CORS already correct.
+- Fix: client sends the readable CSRF cookie value in the Socket.IO handshake
+  `auth` payload (evaluated per handshake); server falls back to
+  `validateSessionByCsrf` when the session cookie is absent. Cookie-first, no
+  behavior change for same-domain setups.
+- Files: `apps/web/src/shared/lib/socket.ts`,
+  `apps/server/src/realtime/io.ts`,
+  `apps/server/src/modules/auth/auth.session.ts`,
+  `apps/server/src/realtime/io.test.ts` (new: cookie ok / csrf-auth ok /
+  wrong-csrf rejected / anonymous rejected), `apps/server/package.json`
+  (`socket.io-client` as devDep for the test)
+- Verified: typecheck (all workspaces), 58/58 server+web tests,
+  `format:check` clean
