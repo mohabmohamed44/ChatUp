@@ -200,7 +200,7 @@ jobs:
             --subnet=default \
             --vpc-egress=private-ranges-only \
             --set-secrets="DATABASE_URL=DATABASE_URL:latest,SESSION_SECRET=SESSION_SECRET:latest,REDIS_URL=REDIS_URL:latest" \
-            --set-env-vars="NODE_ENV=production,PORT=4000,CORS_ORIGIN=${{ vars.CORS_ORIGIN }},APP_URL=${{ vars.APP_URL }},GCS_PROJECT_ID=${{ vars.GCS_PROJECT_ID }},GCS_BUCKET=${{ vars.GCS_BUCKET }}" \
+            --set-env-vars="NODE_ENV=production,CORS_ORIGIN=${{ vars.CORS_ORIGIN }},APP_URL=${{ vars.APP_URL }},GCS_PROJECT_ID=${{ vars.GCS_PROJECT_ID }},GCS_BUCKET=${{ vars.GCS_BUCKET }}" \
             --format='value(status.url)' \
             --quiet)
           echo "url=$URL" >> "$GITHUB_OUTPUT"
