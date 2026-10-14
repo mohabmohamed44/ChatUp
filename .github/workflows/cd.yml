@@ -18,7 +18,7 @@ name: CD
 #   printf '%s' "$SESSION_SECRET" | gcloud secrets create SESSION_SECRET --data-file=-
 #   printf '%s' "$REDIS_URL" | gcloud secrets create REDIS_URL --data-file=-
 #   # Workload Identity Federation for GitHub (no static keys):
-#   # create pool + provider for repo <owner>/chatUp, allow the Cloud Run
+#   # create pool + provider for repo <owner>/ChatUp, allow the Cloud Run
 #   # admin / Cloud SQL client / Secret Manager accessor roles on a deploy SA.
 #
 # NETWORKING (required for Memorystore Redis):
@@ -77,10 +77,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      server-image: ${{ steps.push-server.outputs.image }}
-      web-image: ${{ steps.push-web.outputs.image }}
+      server-image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-server:latest
+      web-image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-web:latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
@@ -88,44 +88,29 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
-      - uses: docker/setup-buildx-action@v4
-
-      - uses: docker/metadata-action@v6
-        id: meta-server
-        with:
-          images: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-server
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest
-      - uses: docker/metadata-action@v6
-        id: meta-web
-        with:
-          images: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-web
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest
+      - uses: docker/setup-buildx-action@v3
 
       - name: Build + push server image
-        id: push-server
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/server/Dockerfile
           push: true
-          tags: ${{ steps.meta-server.outputs.tags }}
-          labels: ${{ steps.meta-server.outputs.labels }}
+          tags: |
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-server:${{ github.sha }}
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-server:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Build + push web image
-        id: push-web
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/web/Dockerfile
           push: true
-          tags: ${{ steps.meta-web.outputs.tags }}
-          labels: ${{ steps.meta-web.outputs.labels }}
+          tags: |
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-web:${{ github.sha }}
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/chatup-web:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # NEXT_PUBLIC_* inline at build time — must be the STABLE prod URLs,
@@ -157,6 +142,8 @@ jobs:
       # pipeline instead of booting the app on a wrong schema.
       # Cloud SQL is reached via the mounted Unix socket (/cloudsql/...) —
       # no VPC egress needed for this job since migrations only touch Postgres.
+      # Note: `gcloud run jobs` uses --set-cloudsql-instances (services use
+      # --add-cloudsql-instances).
       - name: Execute migration job
         run: |
           gcloud run jobs deploy chatup-migrate \
@@ -164,7 +151,7 @@ jobs:
             --region="$GCP_REGION" \
             --image="${{ needs.build-push.outputs.server-image }}" \
             --command=npx --args="prisma,migrate,deploy" \
-            --add-cloudsql-instances="$CLOUDSQL_CONNECTION" \
+            --set-cloudsql-instances="$CLOUDSQL_CONNECTION" \
             --set-secrets="DATABASE_URL=DATABASE_URL:latest" \
             --max-retries=0 \
             --task-timeout=10m \
