@@ -13,7 +13,7 @@ import {
 import type { AppConfig } from '../platform/config';
 import type { Db } from '../platform/db';
 import type { Logger } from '../platform/logger';
-import { validateSession } from '../modules/auth/auth.session';
+import { validateSession, validateSessionByCsrf } from '../modules/auth/auth.session';
 import { PresenceService } from '../modules/presence/presence.service';
 import { registerMessageSocketEvents } from '../modules/messages/messages.routes';
 
@@ -65,7 +65,16 @@ export function createRealtime(
   io.use(async (socket, next) => {
     try {
       const cookies = cookie.parse(socket.request.headers.cookie ?? '');
-      const session = await validateSession(deps.db, cookies[LIMITS.SESSION_COOKIE_NAME]);
+      let session = await validateSession(deps.db, cookies[LIMITS.SESSION_COOKIE_NAME]);
+      if (!session) {
+        // Cross-domain sockets never carry the session cookie (it belongs to
+        // the web domain), so fall back to the CSRF token the client sends in
+        // the handshake auth payload (see web shared/lib/socket.ts).
+        const candidate = socket.handshake.auth?.csrfToken;
+        if (typeof candidate === 'string' && candidate.length > 0) {
+          session = await validateSessionByCsrf(deps.db, candidate);
+        }
+      }
       if (!session) {
         next(new Error('unauthorized'));
         return;
