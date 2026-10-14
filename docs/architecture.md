@@ -45,7 +45,7 @@ points at real GCP services in production through env vars
 ```
 
 - **HTTP** (`apps/server/src/platform/http.ts`): auth, conversations, message
-  history, media upload/download URLs, push acks, health (`/healthz`,
+  history, media upload/download URLs, push acks, health (`/health`,
   `/readyz`), queue observability (`docs/queues.md`).
 - **WebSocket** (`apps/server/src/realtime/io.ts`): sends, live fan-out,
   receipts, typing, presence. Authenticated from the session cookie; rooms are

@@ -64,7 +64,7 @@ npm run build -w @chatup/web            # next build (runs generate-sw first)
 npm run dev -w @chatup/web -- --port 3000
 ```
 
-Health: `GET /healthz` (liveness, always 200 if process up), `GET /readyz` (readiness + DB check).
+Health: `GET /health` (liveness, always 200 if process up), `GET /readyz` (readiness + DB check).
 
 ## 4. Env & Secrets — Never Commit Real Values
 

@@ -90,7 +90,7 @@ services:
 #   2. docker compose -f docker-compose.full.yml up --build -d
 #   3. docker compose -f docker-compose.full.yml ps
 #      → all 5 services Up (postgres/gcs/server "healthy")
-#   4. curl -s localhost:4000/healthz   → {"status":"ok"}
+#   4. curl -s localhost:4000/health   → {"status":"ok"}
 #      curl -s localhost:4000/readyz    → {"status":"ok",...} (DB reachable)
 #      curl -s -o /dev/null -w '%{http_code}\n' localhost:3000/  → 200
 #   5. docker logs chatup_server | head → "migrate deploy" applied, then

@@ -106,7 +106,7 @@ export function setup(): SetupData {
     throw new Error('No load sessions — run `npm run load:seed` against K6 target DB first.');
   }
   const runId = __ENV.K6_RUN_ID || `k6-${Date.now()}`;
-  const health = http.get(`${BASE_URL}/healthz`, { tags: { kind: 'api' } });
+  const health = http.get(`${BASE_URL}/health`, { tags: { kind: 'api' } });
   check(health, { 'target live': (r) => r.status === 200 });
   return { baseUrl: BASE_URL, runId };
 }

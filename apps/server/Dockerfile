@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 # Build context = REPO ROOT: docker build -f apps/server/Dockerfile .
 # Server listens on 4000 (config.PORT default — fixed, do not change).
-# Liveness: GET /healthz (always 200 when the process is up).
+# Liveness: GET /health (always 200 when the process is up; /healthz is
+# reserved by Google's edge on *.run.app and never reaches the container).
 # Readiness: GET /readyz (200 + DB check).
 # Required runtime env (never baked into the image): DATABASE_URL, SESSION_SECRET
 # (>=32 chars), REDIS_URL, CORS_ORIGIN, GCS_PROJECT_ID, GCS_BUCKET,
@@ -54,6 +55,6 @@ RUN chown node:node /app/apps/server
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:4000/healthz').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:4000/health').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 # Apply versioned migrations on boot (never `db push`), then exec for correct signal handling.
 CMD ["sh", "-c", "npx prisma migrate deploy && exec npx tsx src/main.ts"]

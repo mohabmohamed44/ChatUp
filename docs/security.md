@@ -82,7 +82,7 @@ Every protected resource re-checks participation — ids are never trusted:
 - Never log: passwords, session tokens, FCM tokens (only a 12-char prefix at
   `info`), or message bodies. Push payloads log ids (`messageId`,
   `conversationId`), and notification previews travel only inside FCM.
-- Health/readiness (`/healthz`, `/readyz`) and queue stats expose counts,
+- Health/readiness (`/health`, `/readyz`) and queue stats expose counts,
   not user data. Dead-letter inspection (`GET /api/queues/dead-letter`) is
   auth-gated.
 

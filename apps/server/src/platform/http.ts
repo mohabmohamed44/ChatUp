@@ -59,7 +59,10 @@ export function createHttpApp({ config, logger, db, routers }: CreateHttpAppOpti
     }),
   );
 
-  app.get('/healthz', (_req, res) => {
+  // Liveness lives at /health (NOT /healthz): Google's edge intercepts the
+  // exact path /healthz on *.run.app with its own 404, so the probe never
+  // reaches the container in production. Verified 2026-10-14.
+  app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
   });
 

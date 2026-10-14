@@ -218,7 +218,7 @@ jobs:
           # *.run.app route fully propagates (GFE 404s) and min-instances=0
           # needs a cold start (migrate + boot). --retry-all-errors covers
           # transient 404/503; without it the first curl after deploy flakes.
-          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "$URL/healthz" > /dev/null
+          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "$URL/health" > /dev/null
           curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "$URL/readyz" > /dev/null
 
   deploy-web:
@@ -263,7 +263,7 @@ jobs:
         run: |
           echo "server: ${{ needs.deploy-server.outputs.url }}"
           echo "web:    ${{ needs.deploy-web.outputs.url }}"
-          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "${{ needs.deploy-server.outputs.url }}/healthz"
+          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "${{ needs.deploy-server.outputs.url }}/health"
           echo
           curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "${{ needs.deploy-server.outputs.url }}/readyz"
           echo
