@@ -34,6 +34,24 @@ export async function validateSession(db: Db, token: string | undefined) {
   return session;
 }
 
+/**
+ * CSRF-token lookup for the Socket.IO handshake. Cross-domain sockets (web on
+ * one origin, API on another) never carry the HttpOnly session cookie — the
+ * cookie belongs to the web domain — so the client sends the readable CSRF
+ * cookie value in the handshake `auth` payload instead. The CSRF token is a
+ * per-session unguessable secret, only ever transmitted over TLS, and grants
+ * nothing beyond what the cookie already grants.
+ */
+export async function validateSessionByCsrf(db: Db, csrfToken: string | undefined) {
+  if (!csrfToken) return null;
+  const session = await db.session.findFirst({
+    where: { csrfToken },
+    include: { user: true },
+  });
+  if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) return null;
+  return session;
+}
+
 export async function revokeSession(db: Db, sessionId: string): Promise<void> {
   await db.session.update({ where: { id: sessionId }, data: { revokedAt: new Date() } });
 }

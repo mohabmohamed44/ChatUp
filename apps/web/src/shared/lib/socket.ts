@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 
-import type { ClientToServerEvents, ServerToClientEvents } from '@chatup/shared';
+import { LIMITS, type ClientToServerEvents, type ServerToClientEvents } from '@chatup/shared';
 
 // Singleton pattern is a design pattern that
 // ensures a class has only one instance and provides a global point of access to it.
@@ -15,6 +15,14 @@ const socketURL =
 
 let socket: ChatSocket | null = null;
 
+function readCsrfCookie(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const entry = document.cookie
+    .split('; ')
+    .find((part) => part.startsWith(`${LIMITS.CSRF_COOKIE_NAME}=`));
+  return entry?.slice(LIMITS.CSRF_COOKIE_NAME.length + 1);
+}
+
 export function getSocket(): ChatSocket {
   if (!socket) {
     socket = io(socketURL, {
@@ -25,6 +33,13 @@ export function getSocket(): ChatSocket {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       transports: ['websocket', 'polling'],
+      // Cross-domain sockets never carry the HttpOnly session cookie (it
+      // belongs to the web domain), so authenticate the handshake with the
+      // readable CSRF cookie value instead. Evaluated per handshake, so
+      // logins/logouts/rotations are picked up without recreating the socket.
+      auth: (cb) => {
+        cb({ csrfToken: readCsrfCookie() });
+      },
     });
   }
   return socket as ChatSocket;
