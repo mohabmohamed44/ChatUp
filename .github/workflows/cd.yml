@@ -214,8 +214,12 @@ jobs:
           # the VPC; public egress (GCS API, FCM, Cloud Logging) uses Cloud
           # Run's normal egress path. Without these flags the server boots
           # but BullMQ and the Socket.IO redis-adapter fail with ECONNREFUSED.
-          curl -fsS "$URL/healthz" > /dev/null
-          curl -fsS "$URL/readyz" > /dev/null
+          # Smoke checks retry: a brand-new revision serves traffic before the
+          # *.run.app route fully propagates (GFE 404s) and min-instances=0
+          # needs a cold start (migrate + boot). --retry-all-errors covers
+          # transient 404/503; without it the first curl after deploy flakes.
+          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "$URL/healthz" > /dev/null
+          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "$URL/readyz" > /dev/null
 
   deploy-web:
     name: Deploy web to Cloud Run
@@ -246,7 +250,7 @@ jobs:
             --format='value(status.url)' \
             --quiet)
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          curl -fsS "$URL/" > /dev/null
+          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "$URL/" > /dev/null
 
   smoke:
     name: End-to-end smoke
@@ -259,9 +263,9 @@ jobs:
         run: |
           echo "server: ${{ needs.deploy-server.outputs.url }}"
           echo "web:    ${{ needs.deploy-web.outputs.url }}"
-          curl -fsS "${{ needs.deploy-server.outputs.url }}/healthz"
+          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "${{ needs.deploy-server.outputs.url }}/healthz"
           echo
-          curl -fsS "${{ needs.deploy-server.outputs.url }}/readyz"
+          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "${{ needs.deploy-server.outputs.url }}/readyz"
           echo
-          curl -fsS "${{ needs.deploy-web.outputs.url }}/" > /dev/null
+          curl -fsS --retry 10 --retry-delay 10 --retry-all-errors --max-time 30 "${{ needs.deploy-web.outputs.url }}/" > /dev/null
           echo "smoke OK"
