@@ -45,6 +45,30 @@
 - I did not hand-write every line. AI was used as a productivity tool.
 - I will not submit code I cannot explain. If I cannot explain it, I will either learn it or remove it.
 
+## 2026-10-15 — PWA push notification visibility fix (issue record: docs/issues/pwa-notifications.md)
+
+- Investigated: Fixes 1–3 from the issue were already implemented in the
+  current code, so no code change was needed:
+  - Fix 1 (`visibilityState`-aware OS notification): `alertIncomingMessage`
+    (`apps/web/src/features/notifications/lib/alertIncomingMessage.ts`) treats
+    the page as visible only when `document.visibilityState === 'visible' &&
+document.hasFocus()`; both the FCM `onMessage` path
+    (`apps/web/src/app/(app)/layout.tsx`) and the socket path
+    (`useIncomingMessageAlerts.ts`) funnel through it (deduped by message id),
+    falling back to `registration.showNotification(...)` with a per-conversation
+    `tag` when hidden/minimized.
+  - Fix 2 (SW fetch guard): early return for `/socket.io/` and `/api/` already
+    present in `apps/web/scripts/sw.template.js` (and generated `public/sw.js`).
+  - Fix 3 (custom SW registration): `useFcmToken.ts` passes
+    `serviceWorkerRegistration` (`/sw.js`) via the FID-based `register(m, {
+vapidKey, serviceWorkerRegistration })` call — the `getToken` equivalent.
+- Added docs only: `docs/issues/pwa-notifications.md` (issue record),
+  `docs/known-limitations.md` (platform matrix + Linux PWA OS-permission setup
+  - GNOME popup-content note), cross-links from `docs/push-notifications.md`.
+    Fixes 4–5 are manual user actions; they are documented, not coded.
+- I reviewed the diff before committing; verified with `npm run typecheck` and
+  `npm run test:unit` (see below).
+
 ## 2026-10-14 — Socket handshake auth fallback (login loop on Cloud Run)
 
 - Asked AI to diagnose a login-then-bounce-to-login loop on the GCP deploy.

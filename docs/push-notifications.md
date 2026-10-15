@@ -18,6 +18,10 @@ deduped by message id):
 If the user is looking at the conversation, no alert fires — the message just
 renders inline. Own messages never alert.
 
+> Platform matrix, PWA install steps, and Linux OS-permission notes live in
+> [`known-limitations.md`](./known-limitations.md). Full issue record:
+> [`issues/pwa-notifications.md`](./issues/pwa-notifications.md).
+
 ## 2. Server fan-out (offline only)
 
 `notifyWorker` in `apps/server/src/platform/queue.ts`:

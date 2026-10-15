@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import type { MessagePayload } from 'firebase/messaging';
 import { useAuth } from '@/features/auth';
@@ -9,6 +9,7 @@ import { useIncomingMessageAlerts } from '@/features/notifications/hooks/useInco
 import { alertIncomingMessage } from '@/features/notifications/lib/alertIncomingMessage';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { InstallPrompt } from '@/shared/components/InstallPrompt';
+import { X } from 'lucide-react';
 
 /**
  * Registers for push + shows foreground messages as in-app toasts.
@@ -23,7 +24,7 @@ function PushNotifications({ currentUserId }: { currentUserId: string }) {
   const router = useRouter();
   const params = useParams<{ id?: string }>();
   const viewingConversationId = params?.id;
-
+  const [isOpen, setIsOpen] = useState(true);
   const openConversation = useCallback(
     (conversationId: string) => router.push(`/conversations/${conversationId}`),
     [router],
@@ -101,11 +102,20 @@ function PushNotifications({ currentUserId }: { currentUserId: string }) {
       )}
       {!supported && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
-          <p className="max-w-sm rounded-lg bg-slate-900 px-4 py-3 text-center text-xs text-white shadow-lg">
-            On iPhone, tap Share, then Add to Home Screen, then open chatUp from the Home Screen to
-            enable notifications.
-          </p>
+          <div className="relative flex max-w-sm items-center rounded-lg bg-slate-900 py-3 pl-4 pr-10 text-xs text-white shadow-lg">
+            <p className="text-center">
+              Notifications are blocked. Re-enable them in your browser or phone settings to get
+              new-message alerts.
+            </p>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors focus:outline-none"
+              aria-label="Close message"
+            >
+              <X className="h-4 w-4" /> 
+            </button>
         </div>
+      </div>
       )}
     </>
   );
