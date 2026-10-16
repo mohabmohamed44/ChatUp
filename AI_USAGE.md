@@ -45,6 +45,27 @@
 - I did not hand-write every line. AI was used as a productivity tool.
 - I will not submit code I cannot explain. If I cannot explain it, I will either learn it or remove it.
 
+## 2026-10-16 — Load-test tuning (persist worker + Socket.IO heartbeats)
+
+- Asked AI to apply the codebase half of the load-test remediation (failed full
+  k6 run: 26.7% sends failed, ack p95 13.8s). AI traced the ack path
+  (socket send → persist worker → 8s `waitUntilFinished` → direct fallback) and
+  the DB unique constraint, then implemented: persist worker concurrency stays
+  10 (pg pool caps DB parallelism at 10/instance regardless)
+  - `lockDuration` 120s (`apps/server/src/platform/queue.ts`); Socket.IO
+    `pingInterval/pingTimeout/upgradeTimeout` + explicit transports
+    (`apps/server/src/realtime/io.ts`).
+- AI rejected three parts of the proposed fix with reasons: `maxStalledCount: 0`
+  (fails stalled jobs instead of retrying), `stallInterval` (not a valid BullMQ
+  Worker option), server-side `connectTimeout` (client-only; type rejects it).
+- AI verified the 23 idempotency mismatches are not a server dedupe bug (unique
+  constraint present in schema + init migration; P2002 resolves to winner row).
+- Follow-up: refused a second proposal to weaken the gate (think time 0.5s→5s,
+  constant→ramp with only 5m at peak). Instead added `K6_PROFILE=ramp` as a
+  gate-preserving extra (2m up, 10m at 100 VUs, 1m down); `full` untouched.
+- I reviewed the diff before deploying; verified with `typecheck -w
+@chatup/server`, `io.test.ts` 4/4, `load:bundle`, `format:check` (see below).
+
 ## 2026-10-15 — PWA push notification visibility fix (issue record: docs/issues/pwa-notifications.md)
 
 - Investigated: Fixes 1–3 from the issue were already implemented in the

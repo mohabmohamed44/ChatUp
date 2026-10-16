@@ -8,7 +8,7 @@
 // Target: K6_BASE_URL must point at the DEPLOYED assessment env (Cloud Run URL),
 // never at a DB with real user data. Synthetic load users/sessions come from
 // `npm run load:seed` → load-test/.sessions.json (gitignored, seeded per target DB).
-// Optional env: K6_PROFILE=smoke|full (default smoke), K6_RUN_ID (default
+// Optional env: K6_PROFILE=smoke|full|ramp (default smoke), K6_RUN_ID (default
 // k6-<timestamp>, prefixes every clientId so runs never collide),
 // K6_SESSIONS_FILE (absolute path if the bundle moved), K6_DEBUG=1 (per-packet logs).
 //
@@ -56,6 +56,7 @@ interface SetupData {
 const BASE_URL = __ENV.K6_BASE_URL || 'http://localhost:4000';
 const PROFILE = __ENV.K6_PROFILE || 'smoke';
 const FULL = PROFILE === 'full';
+const RAMP = PROFILE === 'ramp';
 const DEBUG = __ENV.K6_DEBUG === '1';
 
 function dbg(...args: unknown[]): void {
@@ -80,13 +81,34 @@ const historyDupes = new Counter('chatup_history_duplicates');
 const broadcasts = new Counter('chatup_broadcasts_received');
 const eioReconnects = new Counter('chatup_eio_reconnects');
 
+// `full` stays constant-vus so reruns are comparable with the original gate.
+// `ramp` is the same gate with a warm-up/cool-down envelope (2m up, 10m at
+// peak, 1m down): identical 10 minutes at 100 VUs, minus the cold-start
+// thundering herd. Supplementary evidence only — never a replacement for
+// `full`, and never with a shortened peak hold.
+function chatScenario() {
+  if (RAMP) {
+    return {
+      executor: 'ramping-vus',
+      startVUs: 0,
+      stages: [
+        { duration: '2m', target: 100 },
+        { duration: '10m', target: 100 },
+        { duration: '1m', target: 0 },
+      ],
+      gracefulRampDown: '30s',
+    };
+  }
+  return {
+    executor: 'constant-vus',
+    vus: FULL ? 100 : 5,
+    duration: FULL ? '10m' : '1m',
+  };
+}
+
 export const options = {
   scenarios: {
-    chat: {
-      executor: 'constant-vus',
-      vus: FULL ? 100 : 5,
-      duration: FULL ? '10m' : '1m',
-    },
+    chat: chatScenario(),
   },
   thresholds: {
     'http_req_duration{kind:api}': ['p(95)<500'],

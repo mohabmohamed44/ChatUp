@@ -334,15 +334,16 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
       }
       return { messageId: msg.id };
     },
-    // Load-tuned (2026-10 full k6 run: 100 VUs, ~100 sends/s): concurrency 50
-    // keeps the persist queue drained so socket acks don't hit the 8s
-    // waitUntilFinished timeout in messages.routes.ts. The Prisma pool
-    // self-throttles DB pressure, so this is queue-side parallelism, not
-    // 50 concurrent transactions. lockDuration 120s (vs 30s default) stops
+    // Load-tuned 2026-10 (100-VU k6 gate): concurrency 10. Effective DB
+    // parallelism is capped by the Prisma/pg pool (max 10 connections per
+    // instance) no matter how high this goes, so a larger number only parks
+    // more jobs waiting on pool checkout — 10 keeps queue-side and DB-side
+    // parallelism matched. lockDuration 120s (vs 30s default) stops
     // CPU-throttled Cloud Run instances from losing job locks mid-write and
     // triggering wasteful stalled-job reprocessing (idempotent anyway, but
-    // reprocessing burns DB + Redis under load).
-    { connection: makeRedis(), concurrency: 50, lockDuration: 120_000 },
+    // reprocessing burns DB + Redis under load). NOTE: maxStalledCount stays
+    // at the default (1) — 0 would fail stalled jobs with no reprocessing.
+    { connection: makeRedis(), concurrency: 10, lockDuration: 120_000 },
   );
 
   const receiptsWorker = new Worker<ReadReceiptJob>(

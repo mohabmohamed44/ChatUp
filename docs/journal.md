@@ -1202,3 +1202,45 @@ Here's the full walkthrough of everything I did for the queues feature, step by 
   (`socket.io-client` as devDep for the test)
 - Verified: typecheck (all workspaces), 58/58 server+web tests,
   `format:check` clean
+
+## 2026-10-16 — Load-test tuning: persist worker + Socket.IO heartbeats
+
+### Problems solved
+
+**5. Full k6 run (100 VUs, 10 min) failed: 26.7% sends failed, ack p95 13.8s**
+
+- Symptom: `chatup_sends_failed` 1395, ack p95 13.8s (threshold 5s), API p95
+  4.09s (threshold 500ms), 1778 k6-side session drops, 23 idempotent mismatches.
+- Cause (codebase side): `message:send` acks only after the
+  `message-persistence` worker finishes (`waitUntilFinished`, 8s cap, then
+  direct-send fallback). The worker ran at `concurrency: 10`, so at ~100
+  sends/s the queue backed up → every ack paid the 8s timeout, then hit an
+  overloaded DB for the fallback write. Separately, the Socket.IO server used
+  all defaults (`pingTimeout` 20s), so slow/throttled heartbeats under load
+  (and Cloud Run idle timeouts) declared live polling sessions dead.
+- Fix (this change): persist worker keeps `concurrency: 10` (effective DB
+  parallelism is capped by the pg pool's 10 connections/instance anyway, so a
+  higher number only parks jobs on pool checkout) + `lockDuration: 120s`
+  (stops CPU-throttled instances losing job locks and reprocessing);
+  Socket.IO `pingInterval 25s / pingTimeout 60s /
+upgradeTimeout 30s`, explicit `transports: ['websocket', 'polling']` +
+  `allowUpgrades` (never drop the polling transport k6 and some proxies use).
+- Deliberately NOT applied from the proposed fix: `maxStalledCount: 0`
+  (fails stalled jobs immediately instead of retrying — the opposite of
+  resilience), `stallInterval` (not a valid BullMQ Worker option; the real
+  name is `stalledInterval`, defaults are fine), and server-side
+  `connectTimeout` (client-only option, the server type rejects it).
+- Idempotency note: the 23 mismatches are NOT a server dedupe bug — the
+  `(conversationId, senderId, clientId)` unique constraint is in the schema
+  AND the init migration, and `send()` resolves P2002 races to the winner
+  row (`messages.service.ts`). Under 13s+ ack latency the k6 15s-deadline +
+  fresh-session retry path is the plausible source; re-run will confirm.
+- Infra (not in this repo — run before the retest): `min-instances=2`,
+  `max-instances=20`, `--cpu=4 --memory=2Gi --concurrency=250` on
+  `chatup-server`, then re-run the full k6 profile.
+- Files: `apps/server/src/platform/queue.ts`,
+  `apps/server/src/realtime/io.ts`, `load-test/k6/chatup.load.ts` (new
+  `K6_PROFILE=ramp`: 2m up, 10m at 100 VUs, 1m down — supplementary only;
+  `full` and the 1s think time are untouched so reruns stay comparable)
+- Verified: `typecheck -w @chatup/server` clean, `io.test.ts` 4/4 pass,
+  `load:bundle` builds with the ramp scenario, `format:check` clean
