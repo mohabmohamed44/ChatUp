@@ -112,10 +112,10 @@ function PushNotifications({ currentUserId }: { currentUserId: string }) {
               className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors focus:outline-none"
               aria-label="Close message"
             >
-              <X className="h-4 w-4" /> 
+              <X className="h-4 w-4" />
             </button>
+          </div>
         </div>
-      </div>
       )}
     </>
   );

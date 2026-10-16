@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-commit guard: block commits that would fail `npm run format:check` in CI.
+# Installed automatically via the root `prepare` script (git core.hooksPath).
+# Bypass only for emergencies: git commit --no-verify
+set -e
+
+if ! npx --no-install prettier --check . > /dev/null 2>&1; then
+  echo "pre-commit: Prettier check failed."
+  echo "Run 'npm run format' then 'git add -u' and commit again."
+  echo "(CI runs 'npm run format:check' and will reject unformatted code.)"
+  npx --no-install prettier --check . || true
+  exit 1
+fi

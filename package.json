@@ -21,6 +21,7 @@
     "db:setup": "npm run db:migrate -w @chatup/server && npm run db:seed -w @chatup/server",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run --project shared --project web --passWithNoTests",
