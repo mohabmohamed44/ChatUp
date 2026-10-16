@@ -41,6 +41,21 @@ export function createRealtime(
   const presence = new PresenceService(deps.db, deps.logger);
   const io: ChatIo = new Server(httpServer, {
     cors: { origin: deps.config.corsOrigins, credentials: true },
+    // Load-tuned for Cloud Run (2026-10 full k6 run: 1778 dropped polling
+    // sessions at 100 VUs). pingTimeout 60s (vs 20s default) survives the
+    // proxy idle timeout and CPU-throttled event loops without declaring live
+    // clients dead; upgradeTimeout 30s gives slow networks room to reach
+    // websocket. Explicit transports + allowUpgrades pin the polling→websocket
+    // upgrade path (Socket.IO defaults today, but load-test clients and some
+    // corporate proxies only ever speak polling — never drop that transport).
+    // NOTE: no `connectTimeout` here — that is a client-side option, the
+    // server type rejects it.
+    pingInterval: 25_000,
+    pingTimeout: 60_000,
+    upgradeTimeout: 30_000,
+    maxHttpBufferSize: 1e6,
+    transports: ['websocket', 'polling'],
+    allowUpgrades: true,
   });
 
   // Multi-instance fan-out: publishes/broadcasts go through Redis so a worker
