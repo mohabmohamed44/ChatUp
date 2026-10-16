@@ -3,13 +3,14 @@
 // k6 cannot run TS directly, so this compiles to JS via esbuild:
 //   npm run load:bundle   # → load-test/k6/dist/chatup.load.js (gitignored)
 //   npm run load:smoke    # 5 VUs, ~1 min, against K6_BASE_URL (default localhost:4000)
+//   npm run load:mid      # 50 VUs, 5 min sustained — mid-scale gate
 //   npm run load          # 100 VUs, 10 min sustained — the AGENTS.md §9 gate
 //
 // Target: K6_BASE_URL must point at the DEPLOYED assessment env (Cloud Run URL),
 // never at a DB with real user data. Synthetic load users/sessions come from
 // `npm run load:seed` → load-test/.sessions.json (gitignored, seeded per target DB).
-// Optional env: K6_PROFILE=smoke|full|ramp (default smoke), K6_RUN_ID (default
-// k6-<timestamp>, prefixes every clientId so runs never collide),
+// Optional env: K6_PROFILE=smoke|mid|full|ramp|ramp-mid (default smoke),
+// K6_RUN_ID (default k6-<timestamp>, prefixes every clientId so runs never collide),
 // K6_SESSIONS_FILE (absolute path if the bundle moved), K6_DEBUG=1 (per-packet logs).
 //
 // Why pre-seeded sessions: /auth/register + /auth/login are rate-limited to
@@ -56,7 +57,11 @@ interface SetupData {
 const BASE_URL = __ENV.K6_BASE_URL || 'http://localhost:4000';
 const PROFILE = __ENV.K6_PROFILE || 'smoke';
 const FULL = PROFILE === 'full';
+const MID = PROFILE === 'mid' || PROFILE === '50';
+// Peak VUs for this run: 5 (smoke) → 50 (mid) → 100 (full/ramp).
+const PEAK_VUS = FULL ? 100 : MID ? 50 : 5;
 const RAMP = PROFILE === 'ramp';
+const RAMP_MID = PROFILE === 'ramp-mid' || PROFILE === 'mid-ramp';
 const DEBUG = __ENV.K6_DEBUG === '1';
 
 function dbg(...args: unknown[]): void {
@@ -82,18 +87,22 @@ const broadcasts = new Counter('chatup_broadcasts_received');
 const eioReconnects = new Counter('chatup_eio_reconnects');
 
 // `full` stays constant-vus so reruns are comparable with the original gate.
-// `ramp` is the same gate with a warm-up/cool-down envelope (2m up, 10m at
-// peak, 1m down): identical 10 minutes at 100 VUs, minus the cold-start
-// thundering herd. Supplementary evidence only — never a replacement for
-// `full`, and never with a shortened peak hold.
+// `mid` is the same shape at 50 VUs / 5 min: half-scale gate for staging or for
+// validating fixes before burning the full 100-VU × 10-min run.
+// `ramp` / `ramp-mid` are the same gates with a warm-up/cool-down envelope (2m
+// up, peak hold, 1m down): identical peak VUs, minus the cold-start thundering
+// herd. Supplementary evidence only — never a replacement for `full`, and
+// never with a shortened peak hold.
 function chatScenario() {
-  if (RAMP) {
+  if (RAMP || RAMP_MID) {
+    const target = RAMP_MID ? 50 : 100;
+    const hold = RAMP_MID ? '5m' : '10m';
     return {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '2m', target: 100 },
-        { duration: '10m', target: 100 },
+        { duration: '2m', target },
+        { duration: hold, target },
         { duration: '1m', target: 0 },
       ],
       gracefulRampDown: '30s',
@@ -101,8 +110,8 @@ function chatScenario() {
   }
   return {
     executor: 'constant-vus',
-    vus: FULL ? 100 : 5,
-    duration: FULL ? '10m' : '1m',
+    vus: PEAK_VUS,
+    duration: FULL ? '10m' : MID ? '5m' : '1m',
   };
 }
 
@@ -126,6 +135,13 @@ export const options = {
 export function setup(): SetupData {
   if (sessions.length === 0) {
     throw new Error('No load sessions — run `npm run load:seed` against K6 target DB first.');
+  }
+  // One session per VU keeps each pair isolated; sharing a conversation across
+  // VUs would serialize sends through the same pair and skew ack latency.
+  if (sessions.length < PEAK_VUS) {
+    throw new Error(
+      `Need ≥${PEAK_VUS} load sessions for profile "${PROFILE}" (got ${sessions.length}) — re-run \`LOAD_USERS=${PEAK_VUS} npm run load:seed\`.`,
+    );
   }
   const runId = __ENV.K6_RUN_ID || `k6-${Date.now()}`;
   const health = http.get(`${BASE_URL}/health`, { tags: { kind: 'api' } });
@@ -400,8 +416,8 @@ export default function (data: SetupData): void {
   }
 
   // Paced REST coverage: history every ~24 sends (~26s per VU at full load →
-  // ~230 req/min across 100 VUs, under the 300 req/min global limiter),
-  // conversation list + /auth/me every ~96.
+  // ~230 req/min across 100 VUs, ~115 req/min at 50 VUs — under the 300 req/min
+  // global limiter), conversation list + /auth/me every ~96.
   if (seq % 24 === 0) {
     verifyHistory(data.baseUrl, s, recentClientIds.slice(-15));
     if (seq % 96 === 0) {
