@@ -383,8 +383,8 @@ export default function (data: SetupData): void {
   if (seq % 24 === 0) {
     verifyHistory(data.baseUrl, s, recentClientIds.slice(-15));
     if (seq % 96 === 0) {
-      http.get(`${baseUrl}/api/conversations`, { tags: { kind: 'api' } });
-      http.get(`${baseUrl}/api/auth/me`, { tags: { kind: 'api' } });
+      http.get(`${data.baseUrl}/api/conversations`, { tags: { kind: 'api' } });
+      http.get(`${data.baseUrl}/api/auth/me`, { tags: { kind: 'api' } });
     }
   }
 
