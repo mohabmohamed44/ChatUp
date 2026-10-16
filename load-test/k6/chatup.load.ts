@@ -410,5 +410,5 @@ export default function (data: SetupData): void {
     }
   }
 
-  sleep(0.5 + Math.random());
+  sleep(5 + Math.random() * 10);
 }

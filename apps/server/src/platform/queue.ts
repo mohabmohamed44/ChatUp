@@ -343,7 +343,7 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
     // triggering wasteful stalled-job reprocessing (idempotent anyway, but
     // reprocessing burns DB + Redis under load). NOTE: maxStalledCount stays
     // at the default (1) — 0 would fail stalled jobs with no reprocessing.
-    { connection: makeRedis(), concurrency: 10, lockDuration: 120_000 },
+    { connection: makeRedis(), concurrency: 10, lockDuration: 120_000, maxStalledCount: 0 },
   );
 
   const receiptsWorker = new Worker<ReadReceiptJob>(
