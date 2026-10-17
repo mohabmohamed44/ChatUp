@@ -1,8 +1,11 @@
 import { MessagesSquare } from 'lucide-react';
+import { RedirectIfAuthenticated } from './RedirectIfAuthenticated';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh bg-white">
+      <RedirectIfAuthenticated />
+
       <aside
         aria-hidden="true"
         className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-500 to-sky-500 p-10 lg:flex xl:w-[52%] xl:p-14"
