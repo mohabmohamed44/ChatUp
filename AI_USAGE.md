@@ -102,3 +102,9 @@ vapidKey, serviceWorkerRegistration })` call — the `getToken` equivalent.
 - I reviewed the diff before deploying: auth stays cookie-first, the CSRF token
   is a per-session unguessable secret sent over TLS only, and real session expiry
   still logs the user out via the existing HTTP 401 path.
+- 2026-10-17: AI assisted with the deployed-401 investigation + fixes (FCM
+  stale-install reset-once retry in useFcmToken, logout-401 resilience and
+  fetchMe race fix in AuthProvider, bfcache pagehide/pageshow socket
+  handling). Verified with curl against the deployed Cloud Run endpoints
+  (cookie attributes, /api/auth/me chain, served /manifest.webmanifest and
+  bundled URLs) and the full local check suite (typecheck/tests/build/format).
