@@ -6,7 +6,10 @@ import type { MessagePayload } from 'firebase/messaging';
 import { useAuth } from '@/features/auth';
 import { useFcmToken } from '@/features/notifications/hooks/useFcmToken';
 import { useIncomingMessageAlerts } from '@/features/notifications/hooks/useIncomingMessageAlerts';
-import { alertIncomingMessage } from '@/features/notifications/lib/alertIncomingMessage';
+import {
+  alertIncomingMessage,
+  resetAlertCount,
+} from '@/features/notifications/lib/alertIncomingMessage';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { InstallPrompt } from '@/shared/components/InstallPrompt';
 import { X } from 'lucide-react';
@@ -36,6 +39,12 @@ function PushNotifications({ currentUserId }: { currentUserId: string }) {
     showToast,
     onOpenConversation: openConversation,
   });
+
+  // User opened (or is viewing) this chat: restart its collapsed-tray counter
+  // so the next background message starts again at a bare preview.
+  useEffect(() => {
+    resetAlertCount(viewingConversationId);
+  }, [viewingConversationId]);
 
   const handleForegroundMessage = useCallback(
     (payload: MessagePayload) => {
