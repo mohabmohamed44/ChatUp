@@ -1,7 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { onMessage, onRegistered, register, type MessagePayload } from 'firebase/messaging';
+import { getApp } from 'firebase/app';
+import { deleteInstallations, getInstallations } from 'firebase/installations';
+import {
+  deleteToken,
+  onMessage,
+  onRegistered,
+  register,
+  type Messaging,
+  type MessagePayload,
+} from 'firebase/messaging';
 import { getMessagingInstance } from '@/shared/lib/firebase/firebase';
 import { apiFetch } from '@/shared/lib/api';
 
@@ -10,6 +19,46 @@ interface UseFcmTokenOptions {
 }
 
 type PermissionState = NotificationPermission | 'unsupported';
+
+// The reset-once path below must never run in a loop: mark it per page load
+// (module scope survives across mounts within the same page load).
+let fcmResetAttempted = false;
+
+/**
+ * Request FCM registration and wait for the resulting Firebase Installation ID
+ * (FID). Self-contained: it owns its timeout and `onRegistered` subscription,
+ * so it can be safely retried by the stale-state reset path below.
+ */
+async function obtainFid(
+  m: Messaging,
+  swRegistration: ServiceWorkerRegistration,
+  vapidKey: string,
+): Promise<string> {
+  let unregister: (() => void) | undefined;
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        unregister?.();
+        unregister = undefined;
+        reject(new Error('No FCM installation ID returned'));
+      }, 10_000);
+      unregister = onRegistered(m, (installationId) => {
+        clearTimeout(timeout);
+        resolve(installationId);
+      });
+      void register(m, {
+        vapidKey,
+        serviceWorkerRegistration: swRegistration,
+      }).catch((err: unknown) => {
+        clearTimeout(timeout);
+        unregister = undefined;
+        reject(err instanceof Error ? err : new Error('FCM registration failed'));
+      });
+    });
+  } finally {
+    unregister?.();
+  }
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -41,7 +90,6 @@ export function useFcmToken(options: UseFcmTokenOptions = {}) {
   }, [onForegroundMessage]);
 
   const lastUploaded = useRef<string | null>(null);
-  const registeredUnsub = useRef<(() => void) | null>(null);
 
   const obtainToken = useCallback(async () => {
     const m = await getMessagingInstance();
@@ -65,27 +113,21 @@ export function useFcmToken(options: UseFcmTokenOptions = {}) {
     // callback fires with the current FID (also on FID rotation/refresh).
     // The value is stored in the Session `fid` column, overwriting any legacy
     // value (the server dedups it across sessions).
-    registeredUnsub.current?.();
-    const fid = await new Promise<string>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        registeredUnsub.current?.();
-        registeredUnsub.current = null;
-        reject(new Error('No FCM installation ID returned'));
-      }, 10_000);
-      registeredUnsub.current = onRegistered(m, (installationId) => {
-        clearTimeout(timeout);
-        resolve(installationId);
-      });
-      void register(m, {
-        vapidKey,
-        serviceWorkerRegistration: swRegistration,
-      }).catch((err: unknown) => {
-        clearTimeout(timeout);
-        reject(err instanceof Error ? err : new Error('FCM registration failed'));
-      });
-    });
-    registeredUnsub.current?.();
-    registeredUnsub.current = null;
+    let fid: string;
+    try {
+      fid = await obtainFid(m, swRegistration, vapidKey);
+    } catch (err) {
+      if (fcmResetAttempted) throw err;
+      fcmResetAttempted = true;
+      // A stale Firebase installation/subscription (e.g. created under an
+      // older config, another project, or a rotated VAPID key) surfaces as a
+      // 401 from fcmregistrations.googleapis.com. Reset the local Firebase
+      // state ONCE per page load and retry — never loop, never rethrow past
+      // the single retry.
+      await deleteToken(m).catch(() => {});
+      await deleteInstallations(getInstallations(getApp())).catch(() => {});
+      fid = await obtainFid(m, swRegistration, vapidKey);
+    }
     setToken(fid);
 
     if (lastUploaded.current !== fid) {
@@ -113,6 +155,7 @@ export function useFcmToken(options: UseFcmTokenOptions = {}) {
       }
       await obtainToken();
     } catch (e: unknown) {
+      console.warn('[push] registration failed', e);
       setError(e instanceof Error ? e.message : 'Failed to enable notifications');
     }
   }, [obtainToken]);
@@ -152,6 +195,7 @@ export function useFcmToken(options: UseFcmTokenOptions = {}) {
           await obtainToken();
         } catch (e: unknown) {
           if (!cancelled) {
+            console.warn('[push] registration failed', e);
             setError(e instanceof Error ? e.message : 'Failed to register for push');
           }
         }

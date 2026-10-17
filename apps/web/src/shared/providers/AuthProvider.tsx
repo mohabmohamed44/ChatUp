@@ -48,8 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Persist userId so meta is populated on reload, not just login/register.
         if (response.user) void setCachedUserId(response.user.id);
       })
-      .catch(() => {
-        if (!cancelled) setUser(null);
+      .catch((error: unknown) => {
+        // Network failure, not "logged out": keep isLoading=false but don't
+        // clobber a user that login may have set while this was in flight.
+        if (!cancelled) {
+          console.warn('Session check failed', error);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -137,7 +141,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore — session revocation below is the real cleanup.
     }
-    await logoutRequest();
+    try {
+      await logoutRequest();
+    } catch {
+      // The session may already be dead (logged out elsewhere, expired, or the
+      // tab was restored from the back/forward cache with a stale socket).
+      // A 401 here is expected — clearing local state below is the real
+      // logout for this client, so never surface it as an uncaught ApiError.
+    }
     await clearCache();
     setUser(null);
   }, []);

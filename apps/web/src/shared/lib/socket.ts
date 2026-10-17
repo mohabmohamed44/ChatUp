@@ -41,6 +41,18 @@ export function getSocket(): ChatSocket {
         cb({ csrfToken: readCsrfCookie() });
       },
     });
+
+    // Back/Forward Cache: Chrome (149+) may put the page in bfcache even with
+    // an open WebSocket. The socket dies while cached and restoration before a
+    // fresh handshake can surface console errors / stale-state reconnects.
+    // The socket never authenticates mid-freeze, so proactively disconnect on
+    // pagehide; the existing reconnection handles pageshow (persisted or not).
+    window.addEventListener('pagehide', () => {
+      socket?.disconnect();
+    });
+    window.addEventListener('pageshow', (event) => {
+      if ((event as PageTransitionEvent).persisted) socket?.connect();
+    });
   }
   return socket as ChatSocket;
 }

@@ -1244,3 +1244,56 @@ upgradeTimeout 30s`, explicit `transports: ['websocket', 'polling']` +
   `full` and the 1s think time are untouched so reruns stay comparable)
 - Verified: `typecheck -w @chatup/server` clean, `io.test.ts` 4/4 pass,
   `load:bundle` builds with the ramp scenario, `format:check` clean
+
+## 2026-10-17 — Deployed 401s: FCM registration recovery, logout resilience, bfcache
+
+### Found (verified against the live deploy, not just the code)
+
+- `curl` login → `GET /api/auth/me` through the web rewrite on the deployed
+  web origin: login 200 with `Set-Cookie: chatup_session=…; Path=/;
+Expires=…; HttpOnly; Secure; SameSite=None` (host-only, correct) and
+  `/auth/me` then 200s with the cookie jar. Server, proxy and cookie chain
+  verified healthy — the old "rewrite falls back to localhost:4000"
+  hypothesis is disproved for the current revision (deployed chunks contain
+  `chatup-server-…run.app` and zero `localhost:4000` occurrences).
+- `SESSION_SECRET` is referenced only in the env schema (config.ts) — cookie
+  tokens are DB-stored sha256 hashes, so secret drift can't produce 401s.
+- `/manifest.webmanifest` serves valid `application/manifest+json` — the
+  console "Manifest: Syntax error" was a truncated fetch behind
+  `ERR_QUIC_PROTOCOL_ERROR` (transient HTTP/3 issue), not a missing/misrouted
+  file. No code change.
+- The `fcmregistrations.googleapis.com 401` only appears in the profile where
+  notification permission was previously granted (incognito never reaches
+  `getToken`, so it cannot 401). Stale Firebase installation/subscription in
+  that profile is the plausible trigger; the FCM SDK surfaces it as a 401
+  from the registrations endpoint.
+
+### Fixed (client-side, root cause actually present in code)
+
+- `useFcmToken.ts`: registration failure now resets Firebase state ONCE per
+  page load (`deleteToken` + `deleteInstallations`) and retries once — never
+  loops, never throws into React; both failure paths log one
+  `[push] registration failed` warning. FID helper extracted
+  (`obtainFid`) so the retry is safe (own timeout + own `onRegistered` sub).
+- `AuthProvider.tsx`: `logout()` catches a 401 from `POST /auth/logout`
+  (expected when the session is already dead) instead of throwing an
+  uncaught `ApiError`; `/auth/me` failure no longer clobbers a user set by an
+  in-flight login (and network errors are no longer treated as "logged out"
+  — `me()` already returns `{ user: null }` on true 401s).
+- `socket.ts`: disconnect on `pagehide`, reconnect on `pageshow` when the
+  page is restored from bfcache (Chrome 149+ bfcaches pages with open
+  WebSockets; the observed `wss://… failed: Page entered Back-Forward
+Cache` console line).
+
+### Manual follow-ups (cannot be verified from the repo)
+
+- Check the Firebase console + GCP IAM for `chatup-dev`: VAPID key matches
+  the built `NEXT_PUBLIC_FIREBASE_VAPID_KEY`, the web-app config
+  (apiKey/appId/senderId/projectId) matches Firebase docs, API key referrer
+  restrictions allow the run.app web origin, and the three FCM APIs are
+  enabled. If the 401 persists after one reset-retry, the config itself is
+  wrong — clearing site data for the web origin is the quick test.
+- Cloud Run env: confirm `CORS_ORIGIN` includes the deployed web URL.
+
+- Verified: `npm run typecheck`, `npm test` (13 files / 99 tests),
+  `npm run build -w @chatup/web`, `format:check` all clean.
