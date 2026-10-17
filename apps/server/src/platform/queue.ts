@@ -1,4 +1,4 @@
-import { Queue, Worker, QueueEvents, type Job } from 'bullmq';
+import { Queue, Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { config } from './config';
 import type { FcmService } from './fcm';
@@ -11,7 +11,6 @@ import { logger } from './logger';
  * Async path (this file): durability + side effects.
  *
  * Queues:
- * - message-persistence  — async DB persist for socket sends (idempotent via jobId + DB unique constraint)
  * - offline-notifications — fan-out after persist; skips online recipients via PresenceService
  * - media-processing      — thumbnail/validation after upload, orphan cleanup
  * - read-receipts         — delivered/read stamping (aggregated, debounced)
@@ -24,7 +23,6 @@ import { logger } from './logger';
  */
 
 export const QUEUES = {
-  MESSAGE_PERSISTENCE: 'message-persistence',
   OFFLINE_NOTIFICATIONS: 'offline-notifications',
   MEDIA_PROCESSING: 'media-processing',
   READ_RECEIPTS: 'read-receipts',
@@ -97,10 +95,6 @@ function makeQueue(name: string, opts = {}) {
   });
 }
 
-export const messagePersistenceQueue = makeQueue(QUEUES.MESSAGE_PERSISTENCE, {
-  attempts: 5,
-  backoff: { type: 'exponential', delay: 1000 },
-});
 export const offlineNotificationsQueue = makeQueue(QUEUES.OFFLINE_NOTIFICATIONS);
 export const mediaProcessingQueue = makeQueue(QUEUES.MEDIA_PROCESSING, {
   attempts: 3,
@@ -123,7 +117,6 @@ export const sessionCleanupQueue = makeQueue(QUEUES.SESSION_CLEANUP, {
 });
 
 export const queues: Record<string, Queue> = {
-  [QUEUES.MESSAGE_PERSISTENCE]: messagePersistenceQueue,
   [QUEUES.OFFLINE_NOTIFICATIONS]: offlineNotificationsQueue,
   [QUEUES.MEDIA_PROCESSING]: mediaProcessingQueue,
   [QUEUES.READ_RECEIPTS]: readReceiptsQueue,
@@ -135,15 +128,6 @@ export const queues: Record<string, Queue> = {
 // ---------------------------------------------------------------------------
 // Job payloads
 // ---------------------------------------------------------------------------
-
-export interface PersistMessageJob {
-  conversationId: string;
-  senderId: string;
-  clientId: string;
-  kind: 'text' | 'image' | 'audio';
-  body?: string | null;
-  attachmentId?: string | null;
-}
 
 export interface OfflineNotificationJob {
   messageId: string;
@@ -184,17 +168,6 @@ async function addOrThrow<T>(
 // ---------------------------------------------------------------------------
 // Enqueue helpers (called from routes / realtime handlers)
 // ---------------------------------------------------------------------------
-
-/** Idempotency key: same clientId retry reuses the same job. */
-export function enqueueMessagePersist(input: PersistMessageJob) {
-  // NOTE: BullMQ custom IDs must not contain ':' (reserved separator).
-  const jobId = `persist_${input.conversationId}_${input.senderId}_${input.clientId}`;
-  return addOrThrow(messagePersistenceQueue, 'persist', input, {
-    jobId,
-    attempts: 5,
-    backoff: { type: 'exponential', delay: 1000 },
-  });
-}
 
 export function enqueueOfflineNotification(job: OfflineNotificationJob) {
   return addOrThrow(offlineNotificationsQueue, 'notify', job, {
@@ -247,7 +220,6 @@ export interface WorkerDeps {
 }
 
 const activeWorkers: Worker[] = [];
-let queueEvents: QueueEvents | null = null;
 
 async function moveToDeadLetter(queueName: string, job: Job, err: Error): Promise<void> {
   try {
@@ -284,67 +256,15 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
     return [];
   }
 
+  // NOTE: message sends persist INLINE in MessagesService.send() (socket
+  // handler → Postgres txn → immediate ack). No persist worker by design:
+  // putting the handler on the consumer side of a queue serializes all sends
+  // on Redis (see docs/issues/server-critical-path-refactor.md). Queues here
+  // are async side effects only (receipts, push, media, hygiene).
+
   // Lazy import breaks the routes -> queue -> service direction cleanly at
   // runtime (service never imports this module).
   const { MessagesService } = await import('../modules/messages/messages.service');
-
-  const persistWorker = new Worker<PersistMessageJob>(
-    QUEUES.MESSAGE_PERSISTENCE,
-    async (job) => {
-      const svc = new MessagesService(
-        deps.db,
-        deps.io as never,
-        deps.storage,
-        deps.config,
-        deps.logger,
-      );
-      const msg = await svc.send(
-        {
-          conversationId: job.data.conversationId,
-          clientId: job.data.clientId,
-          kind: job.data.kind,
-          body: job.data.body,
-          attachmentId: job.data.attachmentId,
-        } as never,
-        job.data.senderId,
-      );
-      // Offline fan-out: only recipients currently offline get a job.
-      try {
-        const { ConversationsService } =
-          await import('../modules/conversations/conversations.service');
-        const convSvc = new ConversationsService(deps.db, deps.storage, deps.config);
-        const participantIds = await convSvc.participantIds(job.data.conversationId);
-        const offline = participantIds.filter(
-          (id) => id !== job.data.senderId && !deps.presence.isOnline(id),
-        );
-        if (offline.length > 0) {
-          await enqueueOfflineNotification({
-            messageId: msg.id,
-            conversationId: job.data.conversationId,
-            senderId: job.data.senderId,
-            recipientIds: offline,
-            preview:
-              job.data.kind === 'text'
-                ? (job.data.body ?? '').slice(0, 160) || null
-                : `[${job.data.kind}]`,
-          }).catch((err) => deps.logger.warn({ err }, 'notify enqueue failed'));
-        }
-      } catch (err) {
-        deps.logger.warn({ err }, 'offline fan-out failed');
-      }
-      return { messageId: msg.id };
-    },
-    // Load-tuned 2026-10 (100-VU k6 gate): concurrency 10. Effective DB
-    // parallelism is capped by the Prisma/pg pool (max 10 connections per
-    // instance) no matter how high this goes, so a larger number only parks
-    // more jobs waiting on pool checkout — 10 keeps queue-side and DB-side
-    // parallelism matched. lockDuration 120s (vs 30s default) stops
-    // CPU-throttled Cloud Run instances from losing job locks mid-write and
-    // triggering wasteful stalled-job reprocessing (idempotent anyway, but
-    // reprocessing burns DB + Redis under load). NOTE: maxStalledCount stays
-    // at the default (1) — 0 would fail stalled jobs with no reprocessing.
-    { connection: makeRedis(), concurrency: 10, lockDuration: 120_000, maxStalledCount: 0 },
-  );
 
   const receiptsWorker = new Worker<ReadReceiptJob>(
     QUEUES.READ_RECEIPTS,
@@ -564,7 +484,6 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
   );
 
   const all = [
-    persistWorker,
     receiptsWorker,
     notifyWorker,
     mediaWorker,
@@ -578,14 +497,9 @@ export async function startWorkers(deps: WorkerDeps): Promise<Worker[]> {
     activeWorkers.push(w);
   }
 
-  queueEvents = new QueueEvents(QUEUES.MESSAGE_PERSISTENCE, { connection: makeRedis() });
   await scheduleRecurringJobs();
   deps.logger.info({ queues: all.map((w) => w.name) }, 'BullMQ workers started');
   return all;
-}
-
-export function getPersistQueueEvents(): QueueEvents | null {
-  return queueEvents;
 }
 
 export async function closeQueues(): Promise<void> {
@@ -595,14 +509,6 @@ export async function closeQueues(): Promise<void> {
     } catch {
       /* shutdown path — ignore */
     }
-  }
-  if (queueEvents) {
-    try {
-      await queueEvents.close();
-    } catch {
-      /* ignore */
-    }
-    queueEvents = null;
   }
   for (const q of Object.values(queues)) {
     try {

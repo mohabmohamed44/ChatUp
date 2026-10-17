@@ -16,6 +16,10 @@ self.addEventListener('notificationclick', (event) => {
   const d = event.notification.data || {};
   const conversationId =
     d.conversationId ?? (d.FCM_MSG && d.FCM_MSG.data && d.FCM_MSG.data.conversationId);
+  // Restart this chat's collapsed-tray counter (user is opening it).
+  if (conversationId && unseenByConversation.has(conversationId)) {
+    unseenByConversation.delete(conversationId);
+  }
   const path = conversationId ? `/conversations/${conversationId}` : '/';
   const targetUrl = new URL(path, self.location.origin).href;
 
@@ -85,6 +89,12 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// Collapsed-tray counter per conversation (mirrors alertIncomingMessage on
+// the page): one `tag` slot per chat, but every message re-alerts via
+// `renotify` and the body carries the count. Lost on worker restart —
+// degrades to a bare preview, never to silence.
+const unseenByConversation = new Map();
+
 messaging.onBackgroundMessage((payload) => {
   const data = (payload && payload.data) || {};
   const notif = (payload && payload.notification) || {};
@@ -104,7 +114,14 @@ messaging.onBackgroundMessage((payload) => {
   // leaving only the raw `push` listener below, which parsed the FCM
   // envelope with the wrong field names and fell back to generic text.
   const notificationTitle = senderName ? `رسالة من ${senderName}` : notif.title || 'New message';
-  const notificationBody = notif.body || data.body || data.preview || '';
+  const latestBody = notif.body || data.body || data.preview || '';
+
+  const convId = data.conversationId || undefined;
+  const unseen = (convId && unseenByConversation.get(convId)) || 0;
+  const count = unseen + 1;
+  if (convId) unseenByConversation.set(convId, count);
+  const notificationBody =
+    count > 1 && latestBody ? `${latestBody} • ${count} new messages` : latestBody;
 
   // showNotification returns a promise but onBackgroundMessage is not an
   // ExtendableEvent — fire-and-forget is fine; keepalive covers the ack.
@@ -112,7 +129,10 @@ messaging.onBackgroundMessage((payload) => {
     body: notificationBody,
     icon: '/icons/192.png',
     badge: '/icons/192.png',
-    tag: data.conversationId || undefined,
+    tag: convId,
+    // Same-tag replacements are silent without this: only the first banner
+    // would buzz and follow-ups would look "missing" (Android + Windows).
+    renotify: true,
     data: {
       conversationId: data.conversationId,
       messageId: data.messageId,

@@ -174,23 +174,6 @@ export class MessagesService {
     private readonly presence?: { isOnline(userId: string): boolean },
   ) {}
 
-  /** Read-only lookup backing the queued-send ack (no emit, no side effects). */
-  async getByClientId(
-    conversationId: string,
-    senderId: string,
-    clientId: string,
-    viewerId: string,
-  ): Promise<Message | null> {
-    const row = await this.db.message.findUnique({
-      where: {
-        conversationId_senderId_clientId: { conversationId, senderId, clientId },
-      },
-      include: { attachment: true },
-    });
-    if (!row) return null;
-    return toMessage(this.db, this.storage, this.config, row, viewerId);
-  }
-
   // ---------------------------------------------------------------------------
   // Send
   // ---------------------------------------------------------------------------

@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import {
   MESSAGE_EVENTS,
-  SOCKET_ROOMS,
   deleteMessageSchema,
   editMessageSchema,
   markPlayedSchema,
@@ -17,55 +16,7 @@ import type { Logger } from '../../platform/logger';
 import type { StorageService } from '../../platform/storage';
 import type { ChatIo } from '../../realtime/io';
 import { MessagesService } from './messages.service';
-import {
-  enqueueReadReceipt,
-  enqueueMessagePersist,
-  getPersistQueueEvents,
-  isRedisHealthy,
-} from '../../platform/queue';
-
-/** Timeout waiting for the persist worker before falling back to direct send. */
-const PERSIST_VIA_QUEUE_TIMEOUT_MS = 8000;
-
-/**
- * Primary send path: durable queue when Redis is healthy, synchronous direct
- * write otherwise. Exactly-once is preserved in both paths by the
- * (conversationId, senderId, clientId) unique constraint — the worker and the
- * fallback share the same idempotency key, so a retry never duplicates.
- */
-async function sendViaQueueOrDirect(
-  service: MessagesService,
-  logger: Logger,
-  payload: Parameters<MessagesService['send']>[0],
-  senderId: string,
-): Promise<Message> {
-  if (await isRedisHealthy()) {
-    try {
-      const job = await enqueueMessagePersist({
-        conversationId: payload.conversationId,
-        senderId,
-        clientId: payload.clientId,
-        kind: payload.kind as 'text' | 'image' | 'audio',
-        body: payload.body,
-        attachmentId: payload.attachmentId,
-      });
-      const events = getPersistQueueEvents();
-      if (events) {
-        await job.waitUntilFinished(events, PERSIST_VIA_QUEUE_TIMEOUT_MS);
-        const persisted = await service.getByClientId(
-          payload.conversationId,
-          senderId,
-          payload.clientId,
-          senderId,
-        );
-        if (persisted) return persisted;
-      }
-    } catch (err) {
-      logger.debug({ err }, 'queue persist path failed, falling back to direct send');
-    }
-  }
-  return service.send(payload, senderId);
-}
+import { enqueueReadReceipt } from '../../platform/queue';
 
 export function createMessagesModule(deps: {
   db: Db;
@@ -114,7 +65,11 @@ export function registerMessageSocketEvents(deps: {
 
     socket.on(MESSAGE_EVENTS.send, async (payload, ack: (result: Ack<Message>) => void) => {
       try {
-        const message = await sendViaQueueOrDirect(service, logger, payload, userId);
+        // Critical-path persistence is inline: MessagesService.send() runs the
+        // Postgres transaction in this handler and acks immediately after
+        // commit. Queues stay off this path (async side effects only) — see
+        // docs/issues/server-critical-path-refactor.md.
+        const message = await service.send(payload, userId);
         ack?.({ ok: true, data: message });
       } catch (err) {
         logger.warn({ err, userId }, 'message:send failed');
