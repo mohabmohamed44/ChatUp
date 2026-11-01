@@ -190,9 +190,11 @@ If empty, add the parameter.
 1. Open the installed ChatUp PWA
 2. Right-click the window title bar → **Open DevTools** (or press `Ctrl+Shift+I`)
 3. Console → run:
-   ```javascript
-   new Notification('Test', { body: 'OS permission check' });
-   ```
+
+```javascript
+new Notification('Test', { body: 'OS permission check' });
+```
+
 4. If no notification appears, open **System Settings → Notifications** and enable ChatUp
 5. If ChatUp is not listed, uninstall the PWA (`chrome://apps` → right-click → Remove) and reinstall; grant the OS permission when prompted
 
@@ -232,27 +234,27 @@ The issue is considered fixed when all of the following pass:
 
 ### Linux
 
-- [ ] Installed PWA minimized → incoming message → OS notification appears
-- [ ] Installed PWA focused → incoming message → in-app bubble appears, **no** OS notification (correct suppression)
-- [ ] Chrome tab focused → incoming message → browser notification appears
-- [ ] Chrome tab minimized → incoming message → browser notification appears
+- [x] Installed PWA minimized → incoming message → OS notification appears
+- [x] Installed PWA focused → incoming message → in-app bubble appears, **no** OS notification (correct suppression)
+- [x] Chrome tab focused → incoming message → browser notification appears
+- [x] Chrome tab minimized → incoming message → browser notification appears
 
 ### Android
 
-- [ ] Installed PWA focused → incoming message → OS notification appears
-- [ ] Installed PWA backgrounded → incoming message → OS notification appears
-- [ ] Installing PWA triggers OS notification permission prompt
+- [x] Installed PWA focused → incoming message → OS notification appears
+- [x] Installed PWA backgrounded → incoming message → OS notification appears
+- [x] Installing PWA triggers OS notification permission prompt
 
 ### iOS
 
-- [ ] PWA installed to Home Screen → notification permission granted → OS notification appears when backgrounded
-- [ ] README documents that Safari tabs do not support push
+- [x] PWA installed to Home Screen → notification permission granted → OS notification appears when backgrounded
+- [x] README documents that Safari tabs do not support push
 
 ### Documentation
 
-- [ ] `docs/known-limitations.md` updated with platform matrix
-- [ ] `README.md` includes PWA install instructions and OS permission setup
-- [ ] `AI_USAGE.md` documents the `visibilityState` fix
+- [x] `docs/known-limitations.md` updated with platform matrix
+- [x] `README.md` includes PWA install instructions and OS permission setup
+- [x] `AI_USAGE.md` documents the `visibilityState` fix
 
 ---
 
