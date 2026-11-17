@@ -1321,3 +1321,19 @@ Cache` console line).
   throttling under k6) with the scoped auth limiter remaining.
 - Verified: `npm run typecheck`, `npm test` (13 files / 99 tests),
   `format:check` all clean.
+
+## 2026-11-17 — Per-user message:send rate limiter (15 msgs / 10 s)
+
+- New `platform/message-rate-limit.ts`: fixed-window per-USER limiter on
+  `message:send` in `realtime/io.ts` (runs before schema parse). Redis
+  (INCR/EXPIRE, shared `redisConnection`) for multi-instance correctness;
+  in-memory Map fallback when Redis is down — messaging degrades, never
+  stops. Redis failure falls back per-check with a warn log.
+- Why per-user, not per-IP: the global limiter was removed for shared-IP
+  throttling (k6); authenticated sends are user-scoped, so 100 VUs (one user
+  each) never approach 15/10 s, while a single flooding user is capped.
+  Exceeding the cap acks `{ code: 'rate_limited' }` — the client marks the
+  message failed and shows the retry button.
+- Tests: `message-rate-limit.test.ts` (window boundary, per-user isolation,
+  allowMessageSend cap through the real backend). Verified: typecheck,
+  103/103 tests, format:check.

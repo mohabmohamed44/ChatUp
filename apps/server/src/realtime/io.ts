@@ -17,6 +17,7 @@ import type { AppConfig } from '../platform/config';
 import type { Db } from '../platform/db';
 import type { Logger } from '../platform/logger';
 import { validateSession, validateSessionByCsrf } from '../modules/auth/auth.session';
+import { allowMessageSend } from '../platform/message-rate-limit';
 import { PresenceService } from '../modules/presence/presence.service';
 import { MessagesService } from '../modules/messages/messages.service';
 import { registerMessageSocketEvents } from '../modules/messages/messages.routes';
@@ -183,6 +184,20 @@ export function createRealtime(
 
     socket.on(MESSAGE_EVENTS.send, async (payload, ack) => {
       try {
+        // Per-user rate limit first (cheapest check): caps DB writes even for
+        // schema-valid floods. Authenticated sends are user-scoped, so the
+        // load test (one user per VU) is unaffected.
+        if (!(await allowMessageSend(userId))) {
+          deps.logger.warn({ userId }, 'message:send rate limited');
+          ack?.({
+            ok: false,
+            error: {
+              code: 'rate_limited',
+              message: 'Too many messages — wait a moment and try again',
+            },
+          });
+          return;
+        }
         // Enforce schema (required fields, body max length) before touching the
         // service — malformed payloads fail fast without a membership query.
         const input = sendMessageSchema.parse(payload);
