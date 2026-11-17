@@ -1297,3 +1297,27 @@ Cache` console line).
 
 - Verified: `npm run typecheck`, `npm test` (13 files / 99 tests),
   `npm run build -w @chatup/web`, `format:check` all clean.
+
+## 2026-11-17 — Security pass: message:send validation, new-conversation room join, doc honesty
+
+- `realtime/io.ts` now owns `message:send`: `sendMessageSchema.parse()`
+  before persistence (oversized/malformed payloads ack
+  `invalid_payload` instead of hitting the DB), via `MessagesService.send()`
+  (membership + clientId idempotency + broadcast preserved). The duplicate
+  listener in `messages.routes.ts` was removed (two listeners = two rows per
+  send).
+- New-conversation room gap fixed: sockets only joined conversation rooms at
+  connect, so `message:new` for a conversation created after connect never
+  reached connected participants. `broadcastConversation()` now calls
+  `io.in(user:<id>).socketsJoin(conversation:<id>)` (idempotent, no
+  `fetchSockets` needed).
+- Debug logs removed (`sw.template.js` notification log,
+  `MessageBubble` edit-gate diagnostic + its now-unused `editBlockReason`).
+- README/docs made honest: Bull Board `/admin/queues` claim removed (no such
+  route exists — only `GET /api/queues/health`), queue count corrected 7 → 6
+  (`message-persistence` no longer exists in `QUEUES`; `docs/queues.md` now
+  says sends persist inline), Playwright E2E rows removed (no specs exist in
+  the repo), rate-limit section reflects the removed global limiter (shared-IP
+  throttling under k6) with the scoped auth limiter remaining.
+- Verified: `npm run typecheck`, `npm test` (13 files / 99 tests),
+  `format:check` all clean.

@@ -75,6 +75,13 @@ export async function broadcastConversation(
   const participantIds = await service.participantIds(conversationId);
   await Promise.all(
     participantIds.map(async (participantId) => {
+      // Sockets only join conversation rooms at connect time, so a
+      // conversation created after connect would otherwise never deliver
+      // `message:new` (emitted to the conversation room) until a reconnect.
+      // socketsJoin is idempotent and self-heals any missed membership.
+      io.in(SOCKET_ROOMS.user(participantId)).socketsJoin(
+        SOCKET_ROOMS.conversation(conversationId),
+      );
       const summary = await service.summaryForUser(conversationId, participantId);
       if (!summary) return;
       io.to(SOCKET_ROOMS.user(participantId)).emit(event, { conversation: summary });

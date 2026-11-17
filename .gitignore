@@ -19,6 +19,8 @@ npm-debug.log*
 .DS_Store
 TODO.md
 TODO_FIX.md
+# Local-only work plan (post-load-test fixes + GCP commands) — never commit.
+WORK_PLAN.md
 apps/server/src/generated/
 apps/server/prisma/*.db
 playwright-report/

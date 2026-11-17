@@ -1,9 +1,12 @@
 import type { Server as HttpServer } from 'node:http';
 import cookie from 'cookie';
 import { Server } from 'socket.io';
+import { ZodError } from 'zod';
 import {
   LIMITS,
+  MESSAGE_EVENTS,
   PRESENCE_EVENTS,
+  sendMessageSchema,
   SOCKET_ROOMS,
   type ClientToServerEvents,
   type PresenceUpdate,
@@ -15,6 +18,7 @@ import type { Db } from '../platform/db';
 import type { Logger } from '../platform/logger';
 import { validateSession, validateSessionByCsrf } from '../modules/auth/auth.session';
 import { PresenceService } from '../modules/presence/presence.service';
+import { MessagesService } from '../modules/messages/messages.service';
 import { registerMessageSocketEvents } from '../modules/messages/messages.routes';
 
 export type ChatIo = Server<
@@ -77,6 +81,17 @@ export function createRealtime(
 
   presence.bind(io);
 
+  // message:send is owned here (validated + persisted via MessagesService);
+  // registerMessageSocketEvents() owns read/sync/edit/delete.
+  const messagesService = new MessagesService(
+    deps.db,
+    io,
+    deps.storage,
+    deps.config,
+    deps.logger,
+    presence,
+  );
+
   io.use(async (socket, next) => {
     try {
       const cookies = cookie.parse(socket.request.headers.cookie ?? '');
@@ -114,31 +129,85 @@ export function createRealtime(
     const userId = socket.data.userId;
     socket.join(SOCKET_ROOMS.user(userId));
     deps.logger.info({ userId, socketId: socket.id }, 'User connected');
-    socket.on('typing:start', (payload) => {
-      socket.to(SOCKET_ROOMS.conversation(payload.conversationId)).emit('typing:update', {
-        conversationId: payload.conversationId,
-        userId,
-        isTyping: true,
-      });
-    });
 
-    socket.on(PRESENCE_EVENTS.snapshot, (userIds) => {
-      const ids = Array.isArray(userIds)
-        ? userIds.filter((id) => typeof id === 'string').slice(0, LIMITS.PRESENCE_SNAPSHOT_MAX_IDS)
-        : [];
-      const snapshot = presence.getSnapshot(ids);
-      for (const [snapshotUserId, status] of Object.entries(snapshot)) {
-        const update: PresenceUpdate = {
-          userId: snapshotUserId,
-          status,
-          at: new Date().toISOString(),
-        };
-        socket.emit(PRESENCE_EVENTS.update, update);
+    socket.on('typing:start', async (payload) => {
+      try {
+        // Check if the user actually belongs to this conversation
+        const membership = await deps.db.conversationParticipant.findUnique({
+          where: {
+            conversationId_userId: {
+              conversationId: payload.conversationId,
+              userId: userId,
+            },
+          },
+        });
+
+        // If they aren't a member, silently ignore (don't throw an error,
+        // otherwise attackers can use errors to guess valid conversation IDs)
+        if (!membership) {
+          return;
+        }
+
+        socket.to(SOCKET_ROOMS.conversation(payload.conversationId)).emit('typing:update', {
+          conversationId: payload.conversationId,
+          userId,
+          isTyping: true,
+        });
+      } catch (err) {
+        deps.logger.error({ err, userId }, 'Failed to process typing:start');
       }
     });
 
-    socket.on('disconnect', () => {
-      presence.onDisconnect(userId, socket.id);
+    socket.on('typing:stop', async (payload) => {
+      try {
+        const membership = await deps.db.conversationParticipant.findUnique({
+          where: {
+            conversationId_userId: {
+              conversationId: payload.conversationId,
+              userId: userId,
+            },
+          },
+        });
+
+        if (!membership) return;
+
+        socket.to(SOCKET_ROOMS.conversation(payload.conversationId)).emit('typing:update', {
+          conversationId: payload.conversationId,
+          userId,
+          isTyping: false,
+        });
+      } catch (err) {
+        deps.logger.error({ err, userId }, 'Failed to process typing:stop');
+      }
+    });
+
+    socket.on(MESSAGE_EVENTS.send, async (payload, ack) => {
+      try {
+        // Enforce schema (required fields, body max length) before touching the
+        // service — malformed payloads fail fast without a membership query.
+        const input = sendMessageSchema.parse(payload);
+        // Critical-path persistence is inline: MessagesService.send() runs the
+        // Postgres transaction in this handler and acks immediately after
+        // commit (membership check, clientId idempotency, room broadcast).
+        const message = await messagesService.send(input, userId);
+        ack?.({ ok: true, data: message });
+      } catch (err) {
+        const invalid = err instanceof ZodError;
+        deps.logger.warn(
+          { err, userId },
+          invalid ? 'Invalid message payload' : 'message:send failed',
+        );
+        // Return a graceful, typed error to the client instead of crashing
+        ack?.({
+          ok: false,
+          error: invalid
+            ? { code: 'invalid_payload', message: 'Invalid message format or too long' }
+            : {
+                code: err instanceof Error && 'code' in err ? String(err.code) : 'send_failed',
+                message: err instanceof Error ? err.message : 'Failed to send message',
+              },
+        });
+      }
     });
 
     void (async () => {

@@ -63,26 +63,8 @@ export function registerMessageSocketEvents(deps: {
   io.on('connection', (socket) => {
     const userId = socket.data.userId;
 
-    socket.on(MESSAGE_EVENTS.send, async (payload, ack: (result: Ack<Message>) => void) => {
-      try {
-        // Critical-path persistence is inline: MessagesService.send() runs the
-        // Postgres transaction in this handler and acks immediately after
-        // commit. Queues stay off this path (async side effects only) — see
-        // docs/issues/server-critical-path-refactor.md.
-        const message = await service.send(payload, userId);
-        ack?.({ ok: true, data: message });
-      } catch (err) {
-        logger.warn({ err, userId }, 'message:send failed');
-        ack?.({
-          ok: false,
-          error: {
-            code: err instanceof Error && 'code' in err ? String(err.code) : 'send_failed',
-            message: err instanceof Error ? err.message : 'Failed to send message',
-          },
-        });
-      }
-    });
-
+    // NOTE: message:send is registered in realtime/io.ts (schema validation +
+    // MessagesService.send) — do not add a second listener for it here.
     socket.on(MESSAGE_EVENTS.read, async (payload, ack: (result: Ack<null>) => void) => {
       try {
         // Async receipts: enqueue for the worker, fall back to direct write

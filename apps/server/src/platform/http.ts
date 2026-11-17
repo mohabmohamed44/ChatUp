@@ -8,7 +8,6 @@ import express, {
   type Response,
   type Router,
 } from 'express';
-import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
 import { pinoHttp } from 'pino-http';
 import { ZodError } from 'zod';
@@ -49,15 +48,6 @@ export function createHttpApp({ config, logger, db, routers }: CreateHttpAppOpti
     req.cookies = cookie.parse(req.headers.cookie ?? '');
     next();
   }) as RequestHandler);
-
-  app.use(
-    rateLimit({
-      windowMs: 60_000,
-      limit: 300,
-      standardHeaders: 'draft-8',
-      legacyHeaders: false,
-    }),
-  );
 
   // Liveness lives at /health (NOT /healthz): Google's edge intercepts the
   // exact path /healthz on *.run.app with its own 404, so the probe never

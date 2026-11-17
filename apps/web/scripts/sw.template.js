@@ -104,8 +104,6 @@ messaging.onBackgroundMessage((payload) => {
     data.senderName || data.sender_name || (notif.title && notif.title.trim()) || '';
   const senderId = data.senderId || data.sender_id || '';
 
-  console.log(`الإشعار مبعوث من: ${senderName} (ID: ${senderId})`);
-
   // NOTE (web): unlike Android, the browser does NOT auto-display a
   // notification when `notification` is present — the worker MUST call
   // showNotification itself, for every payload shape. The old

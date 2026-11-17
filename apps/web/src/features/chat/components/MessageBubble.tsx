@@ -72,50 +72,10 @@ export function MessageBubble({
     message.status !== 'failed';
   const hasMenu = canEdit || canDelete || canShowInfo;
 
-  // Diagnostic: when the menu opens but Edit is hidden, say which gate
-  // blocked it. Open DevTools → Console and look for "[MessageBubble]".
-  const editBlockReason = isDeleted
-    ? 'deleted'
-    : !isOwn
-      ? 'not-own'
-      : message.kind !== 'text'
-        ? `kind-${message.kind}`
-        : message.status === 'failed'
-          ? 'failed'
-          : message.status === 'pending'
-            ? 'pending-no-server-ack-yet'
-            : now - new Date(message.createdAt).getTime() >= EDIT_WINDOW_MS
-              ? 'expired-older-than-15min'
-              : onEdit == null
-                ? 'no-onEdit-handler'
-                : null;
-
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [infoOpen, setInfoOpen] = useState(false);
-
-  useEffect(() => {
-    if (menuOpen && !canEdit) {
-      console.debug('[MessageBubble] Edit hidden', {
-        messageId: message.id,
-        reason: editBlockReason,
-        status: message.status,
-        kind: message.kind,
-        isOwn,
-        createdAt: message.createdAt,
-      });
-    }
-  }, [
-    menuOpen,
-    canEdit,
-    editBlockReason,
-    message.id,
-    message.status,
-    message.kind,
-    message.createdAt,
-    isOwn,
-  ]);
 
   // Close the menu on outside click or Escape, returning focus to the trigger.
   useEffect(() => {

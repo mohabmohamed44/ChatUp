@@ -23,6 +23,10 @@ export interface TypingStartPayload {
   conversationId: string;
 }
 
+export interface TypingStopPayload {
+  conversationId: string;
+}
+
 export interface TypingUpdatePayload {
   conversationId: string;
   userId: string;
@@ -41,6 +45,7 @@ export interface ClientToServerEvents {
   'message:read': (payload: ReadReceiptPayload, ack: (result: Ack<null>) => void) => void;
   'message:sync': (payload: MessageSyncPayload, ack: (result: Ack<Page<Message>>) => void) => void;
   'typing:start': (payload: TypingStartPayload) => void;
+  'typing:stop': (payload: TypingStopPayload) => void;
   'presence:snapshot': (userIds: string[]) => void;
   'message:edit': (payload: EditMessagePayload, ack: (result: Ack<Message>) => void) => void;
   'message:delete': (payload: DeleteMessagePayload, ack: (result: Ack<Message>) => void) => void;

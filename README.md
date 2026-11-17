@@ -69,7 +69,7 @@ Out of scope (optional extensions not built): group chats, calls, payments, reac
 | Push (server)    | Firebase Admin (`firebase-admin`), disabled by default (`FCM_ENABLED=false`)         |
 | Validation       | Zod schemas shared by client and server (`packages/shared`)                          |
 | Auth plumbing    | Opaque session cookie (sha256-hashed token in DB), CSRF, structured logging (`pino`) |
-| Tests            | Vitest (3 projects), supertest, socket.io-client, Playwright (chromium + firefox)    |
+| Tests            | Vitest (3 projects), supertest, socket.io-client                                     |
 | Load testing     | k6 (TypeScript source, esbuild-bundled)                                              |
 | CI/CD            | GitHub Actions (format, typecheck, tests, web build → Artifact Registry → Cloud Run) |
 | Local infra      | Docker Compose (postgres :5432, redis :6379, fake-gcs :4443)                         |
@@ -239,19 +239,18 @@ Foreign keys, uniqueness constraints, and indexes throughout; auth register, med
 
 ## 9. Background jobs (BullMQ)
 
-`apps/server/src/platform/queue.ts` — 7 queues with typed payloads, idempotent job ids, per-worker Redis connections, and **sync fallback when Redis is unreachable**:
+`apps/server/src/platform/queue.ts` — 6 queues with typed payloads, idempotent job ids, per-worker Redis connections, and **sync fallback when Redis is unreachable**:
 
 | Queue                   | Concurrency | Work                                                                              |
 | ----------------------- | ----------- | --------------------------------------------------------------------------------- |
 | `read-receipts`         | 20          | bulk delivered/read stamping                                                      |
-| `message-persistence`   | 10          | legacy queue path (sends now persist inline — see §16.12)                         |
 | `offline-notifications` | 5           | FCM push for offline recipients; skips users who reconnected while the job waited |
 | `media-processing`      | 5           | sharp thumbnails + dimension backfill                                             |
 | `media-cleanup`         | 1           | hourly sweep of stale `PENDING` attachments                                       |
 | `session-cleanup`       | 1           | daily sweep of expired/revoked sessions                                           |
 | `dead-letter`           | 1           | permanently failed jobs with reason + payload                                     |
 
-Observability: `GET /api/queues/health` and `/admin/queues` (dev-only Bull Board). Details in `[docs/queues.md](docs/queues.md)`.
+Observability: `GET /api/queues/health`. Details in `[docs/queues.md](docs/queues.md)`.
 
 ---
 
@@ -272,7 +271,7 @@ Principles from `docs/security.md`, implemented everywhere:
 
 - **Authorization on every HTTP route and socket event** — conversation membership verified via the participants table; `senderId` from the client is never trusted; status updates are never applied on another user's behalf. Non-participants get 403 on conversation history and media.
 - **Auth** — scrypt password hashing, opaque session token (sha256 hash in `Session`), `HttpOnly; Secure; SameSite=None` cookie in production, expiry + revocation, dedicated `x-csrf-token` header on unsafe HTTP requests and the socket CSRF handshake fallback.
-- **Rate limits** — `express-rate-limit` on auth endpoints (20/15 min/IP) and messages; `helmet`; CORS locked to `CORS_ORIGIN` (+ socket origin config).
+- **Rate limits** — `express-rate-limit` on auth endpoints (20/15 min/IP); `helmet`; CORS locked to `CORS_ORIGIN` (+ socket origin config). The global 300 req/min/IP limiter was **removed**: per-IP counting throttled everyone behind shared IPs/NAT (observed under k6 load from a shared egress), and it is not user-scoped. Auth stays IP-limited since it is the brute-force surface.
 - **Input validation** — Zod schemas from `@chatup/shared` on every payload; user content rendered as plain text (React escaping) — never as trusted HTML. Linkification rejects `javascript:`, `data:`, `ftp:`, `mailto:`, `file:`, and protocol-relative URLs; only http/https become `<a target="_blank" rel="noopener noreferrer nofollow">`.
 - **Uploads** — kind + size limits, magic-byte MIME sniffing (filename Content-Type never trusted), validated audio duration.
 - **Secrets** — `.env.example` contains placeholders only; real values stay in gitignored `.env` files or GCP Secret Manager. No session secrets, tokens, message bodies, or signed URLs in logs (pino structured logs); `serviceAccountKey.json` is never committed.
@@ -333,16 +332,15 @@ Two demo accounts come from the seed; the journal's two-browser walkthrough (`do
 
 ## 13. Testing
 
-| Suite                          | Runner                                                              | Covers                                                                                                                                                                          |
-| ------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shared` project               | vitest                                                              | contracts, realtime event maps, timestamp/localization helpers                                                                                                                  |
-| `web` project                  | vitest                                                              | hooks, formatters, text/linkify logic                                                                                                                                           |
-| `server` project (integration) | vitest + supertest + socket.io-client                               | auth/session, membership & authz, persistence & pagination, socket auth + room isolation, media validation + 403s, search module, socket-handshake CSRF fallback (`io.test.ts`) |
-| Playwright E2E                 | chromium + firefox (local, not in CI — needs a live two-user stack) | realtime flows, mobile layout                                                                                                                                                   |
-| Concurrency script             | `apps/server/scripts/test-concurrent-sends.ts`                      | 50 parallel sends → 50 unique rows, no dupes (verified: PASS, 949 ms)                                                                                                           |
-| Idempotency script             | `apps/server/scripts/test-idempotency.ts`                           | same `clientId` twice → one row                                                                                                                                                 |
+| Suite                          | Runner                                         | Covers                                                                                                                                                                          |
+| ------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shared` project               | vitest                                         | contracts, realtime event maps, timestamp/localization helpers                                                                                                                  |
+| `web` project                  | vitest                                         | hooks, formatters, text/linkify logic                                                                                                                                           |
+| `server` project (integration) | vitest + supertest + socket.io-client          | auth/session, membership & authz, persistence & pagination, socket auth + room isolation, media validation + 403s, search module, socket-handshake CSRF fallback (`io.test.ts`) |
+| Concurrency script             | `apps/server/scripts/test-concurrent-sends.ts` | 50 parallel sends → 50 unique rows, no dupes (verified: PASS, 949 ms)                                                                                                           |
+| Idempotency script             | `apps/server/scripts/test-idempotency.ts`      | same `clientId` twice → one row                                                                                                                                                 |
 
-CI (`.github/workflows/ci.yml`) runs on every push/PR: prettier + typecheck → unit → server integration (postgres:16/redis:7 service containers, `chatup_test` with `migrate deploy`) → web production build. Playwright E2E is intentionally local-only; manual-only checks (mic permission, audio format compatibility, playback) are documented per `AGENTS.md`.
+CI (`.github/workflows/ci.yml`) runs on every push/PR: prettier + typecheck → unit → server integration (postgres:16/redis:7 service containers, `chatup_test` with `migrate deploy`) → web production build. Manual-only checks (mic permission, audio format compatibility, playback) are documented per `AGENTS.md`.
 
 ---
 
@@ -520,7 +518,7 @@ Summary (full file: `[AI_USAGE.md](AI_USAGE.md)`); tools: **Kilo Code** (plus th
 - `chatup-server:local` is 2.2 GB (keeps devDeps for tsx runtime); slimming is an open follow-up.
 - Email verification and password reset are intentionally omitted (documented per brief §6).
 - No E2EE; HTTPS + private storage are claimed, transport/server encryption only.
-- README communicates Artillery leftovers only where real evidence exists — the CI does not run Playwright E2E locally recruited browsers; recommend running the two-user Playwright suite before a broader launch along with the prod k6 profile.
+- README communicates Artillery leftovers only where real evidence exists — the CI does not run browser E2E; manual two-user realtime checks plus the prod k6 profile are recommended before a broader launch.
 
 ---
 
